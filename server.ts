@@ -5,6 +5,7 @@ const mime: Record<string, string> = {
   css: "text/css; charset=utf-8",
   svg: "image/svg+xml",
   json: "application/json",
+  webmanifest: "application/manifest+json",
   txt: "text/plain; charset=utf-8",
   png: "image/png",
   woff2: "font/woff2",

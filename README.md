@@ -28,6 +28,32 @@ deno task build  # Checked, optimized production build
 deno task start  # Production server on port 8000
 ```
 
+## Install and play offline
+
+Daybook is an installable Progressive Web App. Open it online once and wait for **Available
+offline** beneath the collection. Every puzzle is generated on your device, so today's collection,
+practice, and the calendar work without a connection after the app is cached. Progress remains in
+localStorage; there is no account or server download needed for each day's puzzles.
+
+- **Android / Chrome:** use **Install Daybook** below the collection, or the browser's Install app
+  menu item.
+- **iPhone / iPad:** open the site in Safari, use **Share → Add to Home Screen**, and keep **Open as
+  Web App** enabled if shown. ([Apple's installation guide](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios))
+- Open the installed app online once too, and check for **Available offline** before leaving your
+  connection. Browser and installed-app storage can be separate, so check your progress there.
+
+The production build generates a versioned service worker that caches the complete app shell and
+install icons. It never caches health checks or third-party requests. Updates download in the
+background when online and wait until all Daybook tabs/windows close before activating. This keeps
+an open puzzle on one consistent build; the previous app cache is removed after activation.
+Saved puzzle progress is preserved across updates. Clearing browser/site data also removes the
+offline cache and progress, and browsers may evict stored data when device space is low.
+
+Installation requires HTTPS (localhost also works for testing). Development mode does not register
+a service worker, keeping local edits fresh. To test offline support, run `deno task build` followed
+by `deno task start`, open port 8000 online, wait for the offline-ready message, then disconnect and
+reopen the app. See [MDN's caching guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Caching).
+
 ## Host with a container
 
 ```sh
@@ -169,6 +195,9 @@ grid interface.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
 - `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
 - `src/input.ts`: queen tap/double-tap and drag gesture state.
+- `src/pwa.ts`: installation prompts, service worker registration, and offline status.
+- `src/service-worker.js`: offline cache lifecycle; Vite injects the build hash and asset list.
+- `public/manifest.webmanifest` / `public/icons/`: phone installation metadata and icons.
 - `src/storage.ts`: dates, feature rotation, durations, and local persistence.
 - `tests/puzzles_test.ts`: puzzle and persistence regression coverage.
 - `server.ts`: production static server, cache headers, and health endpoint.
@@ -181,6 +210,11 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 [Phaser scaling](https://docs.phaser.io/phaser/concepts/scale-manager).
 
 ## Verification
+
+PWA checks cover Chrome installability, all twelve puzzles offline, saved notes and completion after
+offline reload and a full browser restart, waiting updates, old assets remaining available during
+an update, and cache cleanup after activation. The updated app also reopens offline with saved
+progress intact. Physical iPhone installation still requires checking on the device.
 
 The initial implementation passed type checking, lint, eight regression tests, and a production
 build. A separate full-year sweep generated and validated **3,285 puzzles (all nine games for every

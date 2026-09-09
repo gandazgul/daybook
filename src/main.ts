@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import { fiveRegions } from "./extra-puzzles.ts";
 import { gridLine, QueensInput } from "./input.ts";
+import { installDaybook, pwa, startPwa } from "./pwa.ts";
 import {
   adjacent,
   generate,
@@ -26,7 +27,7 @@ import {
 } from "./storage.ts";
 
 type Page = "today" | "calendar" | "practice" | "game";
-type Modal = "help" | "pause" | "reset" | "settings" | null;
+type Modal = "help" | "pause" | "reset" | "settings" | "install" | null;
 const LIGHT = {
   bg: 0xf6f5ef,
   panel: 0xfdfcf8,
@@ -133,6 +134,10 @@ class Daybook extends Phaser.Scene {
     super("Daybook");
   }
   create() {
+    globalThis.addEventListener("daybook:pwa", () => {
+      if (this.page !== "game" || this.modal === "install") this.draw();
+    });
+    startPwa();
     this.scale.on("resize", () => {
       this.scrollY = 0;
       this.draw();
@@ -525,6 +530,8 @@ class Daybook extends Phaser.Scene {
     this.clockText = undefined;
     this.focusOutline = undefined;
     this.cameras.main.setBackgroundColor(this.C.bg);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", css(this.C.bg));
+    document.documentElement.style.backgroundColor = css(this.C.bg);
     this.contentHeight = this.H;
     if (this.page === "game") this.drawGame();
     else {
@@ -715,7 +722,33 @@ class Daybook extends Phaser.Scene {
         11,
         c.muted,
       );}
-    this.contentHeight = end + 110 + this.scrollY;
+    if (!pwa.enabled) {
+      this.contentHeight = end + 110 + this.scrollY;
+      return;
+    }
+    const installY = end + (this.mobile ? 97 : 65);
+    if (!pwa.installed) {
+      this.button(m, installY, Math.min(200, w), 40, "Install Daybook", () => {
+        this.modal = "install";
+        this.draw();
+      });
+    }
+    if (pwa.enabled) {
+      this.text(
+        m,
+        installY + (pwa.installed ? 0 : 52),
+        pwa.ready ? pwa.updateWaiting
+          ? "Available offline · Close and reopen Daybook to update."
+          : "Available offline" : pwa.failed
+          ? "Offline setup needs a connection. Open Daybook again online."
+          : "Preparing offline play…",
+        12,
+        c.muted,
+        undefined,
+        w,
+      );
+    }
+    this.contentHeight = installY + 105 + this.scrollY;
   }
   miniature(kind: Kind, cx: number, cy: number, s: number) {
     const color = this.tint(kind),
@@ -2162,7 +2195,50 @@ class Daybook extends Phaser.Scene {
       this.button(x + pad + (bw + 8) * 2, y + h - 64, bw, 42, "Got it", close, true);
     }
   }
+  drawInstall() {
+    const c = this.C, w = Math.min(this.W - 32, 460), pad = 24;
+    const fontSize = this.H < 400 ? 12 : 14;
+    const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const instructions = pwa.prompt
+      ? "Tap Install below to add Daybook to your home screen."
+      : apple
+      ? "In Safari, open Share, then Add to Home Screen. Keep Open as Web App on if shown."
+      : "Open your browser menu and choose Install app or Add to Home screen.";
+    const body = instructions + "\n\n" + (pwa.ready
+      ? "Ready for offline play. Your puzzles and progress stay on this device."
+      : "Open Daybook online once and wait for Available offline before going offline.");
+    const measured = this.text(0, 0, body, fontSize, c.muted, undefined, w - pad * 2);
+    const h = 86 + measured.height + 82;
+    measured.destroy();
+    const x = (this.W - w) / 2, y = (this.H - h) / 2;
+    this.controls = [];
+    this.focused = -1;
+    this.add.rectangle(0, 0, this.W, this.H, c.bg, .96).setOrigin(0).setInteractive();
+    this.box(x, y, w, h, c.panel, c.line, 16);
+    this.text(x + pad, y + 26, "Install Daybook", 25, c.ink, "Georgia");
+    this.text(x + pad, y + 86, body, fontSize, c.muted, undefined, w - pad * 2);
+    const close = () => {
+      this.modal = null;
+      this.draw();
+    };
+    if (pwa.prompt) {
+      const bw = (w - pad * 2 - 10) / 2;
+      this.button(x + pad, y + h - 60, bw, 40, "Back", close);
+      this.button(x + pad + bw + 10, y + h - 60, bw, 40, "Install", () => {
+        close();
+        void installDaybook().catch(() => {
+          this.modal = "install";
+          this.draw();
+        });
+      }, true);
+    } else this.button(x + pad, y + h - 60, w - pad * 2, 40, "Got it", close, true);
+  }
   drawModal() {
+    if (this.modal === "install") {
+      this.drawInstall();
+      return;
+    }
     if (this.modal === "help") {
       this.drawHelp();
       return;
@@ -2265,8 +2341,8 @@ new Phaser.Game({
   backgroundColor: LIGHT.bg,
   scale: {
     mode: Phaser.Scale.RESIZE,
-    width: globalThis.innerWidth,
-    height: globalThis.innerHeight,
+    width: document.getElementById("game")!.clientWidth,
+    height: document.getElementById("game")!.clientHeight,
   },
   render: { antialias: true, roundPixels: false },
   input: { activePointers: 2 },
