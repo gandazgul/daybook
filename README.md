@@ -1,32 +1,56 @@
 # Daybook
 
-Twelve daily logic puzzles, a calendar, and a quiet place to play. Built entirely in **Phaser 3**,
-with **TypeScript, Vite, and Deno 2**. All boards, illustrations, menus, dialogs, and controls are
-drawn in the engine. No image service, artwork assets, account, score, streak, audio, or external
-font is required.
+A quiet collection of **twelve daily logic puzzles**, with unlimited practice, guided tutorials, and
+offline play. Built with **Phaser 3, TypeScript, Vite, and Deno 2**; the puzzle boards,
+illustrations, menus, and controls are drawn in the game engine.
 
-## Run locally
+**[Play Daybook](https://puzzle.dumbhome.uk)** · [MIT License](LICENSE)
 
-Install [Deno 2](https://docs.deno.com/runtime/getting_started/installation/), then:
+- **A fresh daily collection:** one puzzle of each kind, a rotating featured game, and a calendar
+  showing started and completed days.
+- **Unlimited practice:** generate another puzzle whenever you want, independently of daily
+  progress.
+- **Install and play offline:** a phone-friendly PWA with on-device puzzle generation and locally
+  saved daily progress.
+- **Learn the rules:** first-visit tutorials for all twelve games, replayable from each puzzle page.
+  Highlights explain the rules; Nurikabe includes illustrated examples.
+- **Comfortable night play:** warm paper and dim night themes, larger readable labels, gentle touch
+  feedback, and an optional timer. Completed puzzles remain visible beside or above the next-puzzle
+  controls.
+- **No account, points, or streaks:** solving time is recorded, with no leaderboard, sounds, or
+  cross-device profile.
 
-```sh
-deno install --frozen
-deno task dev
-```
+## The games
 
-Open [Daybook locally](http://localhost:5198). The development server uses port 5198 with strict
-port checking. To select a different port:
+| Game            | Goal                                                                                                                     | Board |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----- |
+| Sudoku          | Place 1–9 once in each row, column, and 3 × 3 box                                                                        | 9 × 9 |
+| Pipes           | Rotate pipes to connect every tile and endpoint to the water source without leaks                                        | 5 × 5 |
+| Atoms           | Match each atom's required bonds using one or two lines between adjacent atoms; connect the whole network                | 4 × 4 |
+| Killer Sudoku   | Follow Sudoku rules and satisfy cage totals, without repeating digits inside a cage                                      | 9 × 9 |
+| Regional Queens | Place one queen per row, column, and region; queens cannot touch, even diagonally                                        | 6 × 6 |
+| Shikaku         | Cover the grid with rectangles, each containing one clue equal to its area                                               | 6 × 6 |
+| Number Path     | Visit numbered dots in order along one path that fills every square exactly once                                         | 5 × 5 |
+| Balance         | Place three of each shape per row and column, with no three consecutive identical shapes; satisfy = and × clues          | 6 × 6 |
+| Mosaic          | Shade squares so every clue matches its surrounding 3 × 3 area, including its own square                                 | 6 × 6 |
+| Dosun-Fuwari    | Place one supported balloon and one supported weight in each region                                                      | 6 × 6 |
+| Nurikabe        | Make numbered islands of exact sizes, with one clue each, surrounded by connected water with no solid 2 × 2 water blocks | 5 × 5 |
+| Five Cells      | Partition the grid into connected groups of five; clues count bordering sides, including the outer frame                 | 5 × 5 |
 
-```sh
-deno task dev --port 5200
-```
+Completion is checked against each game's rules. Sudoku, Killer Sudoku, Regional Queens, Shikaku,
+Balance, Mosaic, Dosun-Fuwari, Nurikabe, and Five Cells have solver-checked unique solutions. Pipes,
+Atoms, and Number Path are generated from valid constructions and accept any valid solution.
 
-```sh
-deno task check  # TypeScript and lint
-deno task test   # Generation, uniqueness, validation, dates, and persistence
-deno task build  # Checked, optimized production build
-deno task start  # Production server on port 8000
-```
+Regional Queens uses the regional placement rules, so queens do not attack along an entire chess
+diagonal. Balance does not require different rows to have unique patterns. Atoms connects only
+orthogonally adjacent grid cells. Mosaic uses the Fill-a-Pix rules, with every unshaded square
+explicitly marked empty. Unused Dosun-Fuwari squares can stay blank.
+
+The additional rules references are Nikoli's
+[Dosun-Fuwari](https://www.nikoli.co.jp/en/puzzles/dosun_fuwari/),
+[Nurikabe](https://www.nikoli.co.jp/en/puzzles/nurikabe/), and
+[Five Cells](https://www.nikoli.co.jp/en/puzzles/five_cells/). Daybook's generators, wording, and
+Phaser drawings are independently implemented.
 
 ## Install and play offline
 
@@ -38,84 +62,38 @@ localStorage; there is no account or server download needed for each day's puzzl
 - **Android / Chrome:** use **Install Daybook** below the collection, or the browser's Install app
   menu item.
 - **iPhone / iPad:** open the site in Safari, use **Share → Add to Home Screen**, and keep **Open as
-  Web App** enabled if shown. ([Apple's installation guide](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios))
+  Web App** enabled if shown.
+  ([Apple's installation guide](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios))
 - Open the installed app online once too, and check for **Available offline** before leaving your
   connection. Browser and installed-app storage can be separate, so check your progress there.
 
 The production build generates a versioned service worker that caches the complete app shell and
 install icons. It never caches health checks or third-party requests. Updates download in the
 background when online and wait until all Daybook tabs/windows close before activating. This keeps
-an open puzzle on one consistent build; the previous app cache is removed after activation.
-Saved puzzle progress is preserved across updates. Clearing browser/site data also removes the
-offline cache and progress, and browsers may evict stored data when device space is low.
+an open puzzle on one consistent build; the previous app cache is removed after activation. Saved
+puzzle progress is preserved across updates. Clearing browser/site data also removes the offline
+cache and progress, and browsers may evict stored data when device space is low.
 
-Installation requires HTTPS (localhost also works for testing). Development mode does not register
-a service worker, keeping local edits fresh. To test offline support, run `deno task build` followed
+Installation requires HTTPS (localhost also works for testing). Development mode does not register a
+service worker, keeping local edits fresh. To test offline support, run `deno task build` followed
 by `deno task start`, open port 8000 online, wait for the offline-ready message, then disconnect and
-reopen the app. See [MDN's caching guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Caching).
+reopen the app. See
+[MDN's caching guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Caching).
 
-## Host with a container
+## Guided rules tutorials
 
-```sh
-podman build --format docker -t daybook .
-podman run --rm --name daybook --read-only --cap-drop=ALL \
-  --security-opt=no-new-privileges --memory=256m -p 8000:8000 daybook
-```
+Each game's first visit on a device opens a short, step-by-step tutorial. Daily and practice share
+the same per-game flag in local storage (`daybook:tutorials:v1:<kind>`). Finishing or skipping marks
+that tutorial as seen; leaving before either lets it appear again next time. The **Tutorial** button
+on every puzzle page replays it, including completed puzzles.
 
-Open [Daybook on port 8000](http://localhost:8000). `compose.yaml` is also available for
-Compose-compatible tooling.
-
-To build on Apple Silicon for an amd64 host, add `--platform linux/amd64` to the build command. Tag
-the resulting image for your registry and push it using `podman push`.
-
-For Kubernetes, expose container port 8000 through a Service and your HTTPS Ingress. Use `/healthz`
-for readiness and liveness probes. The server supports running as UID/GID 1000 with a read-only
-filesystem and all Linux capabilities dropped. A 256 MiB memory limit passed the container smoke
-test, including amd64 emulation on Apple Silicon.
-
-The multi-stage image builds with Deno, then runs a small dependency-free Deno static server as a
-non-root user. Compose makes the filesystem read-only and drops Linux capabilities. `/healthz` is
-the health endpoint. Put your normal HTTPS reverse proxy in front for a public domain. There are no
-backend data volumes or scheduled generation jobs to maintain. `PORT` configures the server's listen
-port; Compose's published port must match if you change it.
-
-## The games
-
-| Game            | Rules                                                                                                | Generated board                          |
-| --------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Sudoku          | Digits 1–9 once per row, column, and 3 × 3 box                                                       | 9 × 9, unique solution                   |
-| Pipes           | Rotate tiles to connect every pipe and endpoint to the source, without leaks                         | 5 × 5, constructed from a connected tree |
-| Atoms           | Satisfy each numbered atom with single or double bonds to adjacent atoms; connect the entire network | 4 × 4, one or two lines per bond         |
-| Killer Sudoku   | Sudoku plus outlined sum cages with no repeated digits                                               | 9 × 9, unique solution                   |
-| Regional Queens | One queen per row, column, and region; no touching, including diagonally                             | 6 × 6, unique solution                   |
-| Shikaku         | Cover the grid with rectangles; each contains one clue equal to its area                             | 6 × 6, unique solution                   |
-| Number Path     | Visit numbered dots in order with a single path that fills every square                              | 5 × 5, a constructed Hamiltonian path    |
-| Balance         | Three of each shape per row/column, no three consecutive, respecting = and × clues                   | 6 × 6, unique solution                   |
-| Mosaic          | Each clue counts shaded squares in its surrounding 3 × 3 area, including itself                      | 6 × 6, unique solution                   |
-
-Number Path, Pipes, and Atoms accept **any valid solution**, not just the generated witness.
-Regional Queens follows the regional queen-placement rules (not full chess queen diagonals). Balance
-uses the two-symbol rules; it does not add a separate rule forbidding duplicate rows. Mosaic is the
-Fill-a-Pix interpretation. Atoms uses orthogonally adjacent cells, with no line crossing or diagonal
-bonds. Generators and validators live in `src/puzzles.ts` and `src/extra-puzzles.ts`, independent
-of Phaser.
-
-The additional games follow the rules described by Nikoli, using original generators, wording, and
-Phaser drawings: [Dosun-Fuwari](https://www.nikoli.co.jp/en/puzzles/dosun_fuwari/),
-[Nurikabe](https://www.nikoli.co.jp/en/puzzles/nurikabe/), and
-[Five Cells](https://www.nikoli.co.jp/en/puzzles/five_cells/).
-
-- **Dosun-Fuwari (6 × 6):** one balloon and one weight in each region, supported vertically by the
-  appropriate outer edge, a rock, or the same kind of piece. Region walls do not support pieces.
-- **Nurikabe (5 × 5):** numbered islands of exact sizes, separated by a connected sea with no 2 × 2
-  sea squares. Each island has one clue.
-- **Five Cells (5 × 5):** connected groups of five cells, with clues counting the bordering sides of
-  a cell, including the outer frame. No extra borders inside groups.
-
-All three have deterministic, solver-checked unique solutions. Dosun-Fuwari reshapes connected
-regions while retaining uniqueness; Nurikabe builds a sea and validates island clues; Five Cells
-uses pentomino tilings and removes redundant clues. Completion checks the rules, not equality with
-the generator's stored solution.
+Each step explains a rule or control and highlights its relevant cells, clues, regions or edges.
+Nurikabe uses labeled teaching boards to show completed islands and water, allowed corner touches,
+and forbidden patterns, then returns to the current puzzle. Other tutorials highlight the current
+board throughout. Tutorials never read the solution, suggest a move, or edit progress. Solving time
+pauses throughout. Use Previous/Next, the arrow keys, or Enter to advance; Skip or Escape returns to
+the puzzle. The board stays visible beside or above the instructions, in either theme. If local
+storage is unavailable, the seen flag lasts for the current session only.
 
 ## Daily collection and practice
 
@@ -124,8 +102,8 @@ the generator's stored solution.
 - Dosun-Fuwari, Nurikabe, and Five Cells join daily collections from **September 9, 2026**. Earlier
   dates retain nine games and their existing completion status. All twelve are available in
   practice. Existing generators and saved puzzle identifiers are unchanged.
-- The featured game rotates through the kinds available on that date. Puzzles generate on demand,
-  so an unattended server needs no cron job.
+- The featured game rotates through the kinds available on that date. Puzzles generate on demand, so
+  an unattended server needs no cron job.
 - The calendar allows past dates and prevents future-day play. A day is complete when all games
   available on that date are finished. Partial completion and started days have markers.
 - Practice uses a fresh random seed on every opening and never changes the daily calendar. Practice
@@ -133,8 +111,8 @@ the generator's stored solution.
 - Entries, pencil notes, completion timestamps, and accumulated solving seconds are saved in
   localStorage. Daily progress resumes after reload. Undo/redo history is session-only. There is no
   cross-device sync or server-side profile.
-- Time stops on completion, while a pause, rules, or settings dialog is open, while the tab is
-  hidden, and when leaving the puzzle. A hidden tab requires resuming.
+- Time stops on completion, while a tutorial, pause, rules, or settings dialog is open, while the
+  tab is hidden, and when leaving the puzzle. A hidden tab requires resuming.
 - At midnight, the collection updates to the new day; an open puzzle stays on its original date so
   current work is not interrupted.
 
@@ -144,21 +122,6 @@ your puzzle history. If storage is blocked, the collection shows that progress i
 
 Completed puzzles remain visible, with the success message and next-puzzle button beside the board
 on desktop or below it on smaller screens.
-
-## Guided rules tutorials
-
-Each game's first visit on a device opens a short, step-by-step tutorial. Daily and practice share
-the same per-game flag in local storage (`daybook:tutorials:v1:<kind>`). Finishing or skipping marks
-that tutorial as seen; leaving before either lets it appear again next time. The **Tutorial**
-button on every puzzle page replays it, including completed puzzles.
-
-Each step explains a rule or control and highlights its relevant cells, clues, regions or edges.
-Nurikabe uses labeled teaching boards to show completed islands and water, allowed corner touches,
-and forbidden patterns, then returns to the current puzzle. Other tutorials highlight the current
-board throughout. Tutorials never read the solution, suggest a move, or edit progress. Solving time
-pauses throughout. Use Previous/Next, the arrow keys, or Enter to advance; Skip or Escape returns to
-the puzzle. The board stays visible beside or above the instructions, in either theme. If local
-storage is unavailable, the seen flag lasts for the current session only.
 
 ## Night play and controls
 
@@ -176,11 +139,11 @@ reduced-motion setting, this becomes a stationary highlight.
   that note to every selected empty cell, or removes it when they all already contain it. Existing
   answers and fixed clues stay intact during bulk note entry. Each batch is one undo step. Tap a
   cell or use an arrow to return to a single selection; turning notes off also selects one cell.
-  Placing an answer removes notes that conflict with written numbers in the same row, column,
-  box, or Killer cage. Undo restores the entry and its removed notes together.
-  Double-tap or double-click a cell with exactly one note to fill its number, even with notes on.
-  Digits with nine placed copies turn gray and cannot be entered from the keypad or keyboard;
-  clearing or undoing an entry enables them again.
+  Placing an answer removes notes that conflict with written numbers in the same row, column, box,
+  or Killer cage. Undo restores the entry and its removed notes together. Double-tap or double-click
+  a cell with exactly one note to fill its number, even with notes on. Digits with nine placed
+  copies turn gray and cannot be entered from the keypad or keyboard; clearing or undoing an entry
+  enables them again.
 - **Pipes:** tap to rotate clockwise.
 - **Atoms:** tap midway between two atoms to cycle no bond → one line → two lines. With a keyboard,
   select an atom with arrows, then Shift + an arrow cycles its bond.
@@ -209,18 +172,66 @@ The layout adapts to phones and desktop windows. Region letters supplement color
 have keyboard navigation and a live text announcement region; this is not yet a full screen-reader
 grid interface.
 
+## Run locally
+
+Install [Deno 2](https://docs.deno.com/runtime/getting_started/installation/), then:
+
+```sh
+deno install --frozen
+deno task dev
+```
+
+Open [Daybook locally](http://localhost:5198). The development server uses port 5198 with strict
+port checking. To select a different port:
+
+```sh
+deno task dev --port 5200
+```
+
+```sh
+deno task check  # TypeScript and lint
+deno task test   # Generation, uniqueness, validation, dates, and persistence
+deno task build  # Checked, optimized production build
+deno task start  # Production server on port 8000
+```
+
+## Host with a container
+
+```sh
+podman build --format docker -t daybook .
+podman run --rm --name daybook --read-only --cap-drop=ALL \
+  --security-opt=no-new-privileges --memory=256m -p 8000:8000 daybook
+```
+
+Open [Daybook on port 8000](http://localhost:8000). `compose.yaml` is also available for
+Compose-compatible tooling.
+
+To build on Apple Silicon for an amd64 host, add `--platform linux/amd64` to the build command. Tag
+the resulting image for your registry and push it using `podman push`.
+
+For Kubernetes, expose container port 8000 through a Service and your HTTPS Ingress. Use `/healthz`
+for readiness and liveness probes. The server supports running as UID/GID 1000 with a read-only
+filesystem and all Linux capabilities dropped. A 256 MiB memory limit passed the container smoke
+test, including amd64 emulation on Apple Silicon.
+
+The multi-stage image builds with Deno, then runs a small dependency-free Deno static server as a
+non-root user. Compose makes the filesystem read-only and drops Linux capabilities. `/healthz` is
+the health endpoint. Put your normal HTTPS reverse proxy in front for a public domain. There are no
+backend data volumes or scheduled generation jobs to maintain. `PORT` configures the server's listen
+port; Compose's published port must match if you change it.
+
 ## Structure
 
 - `src/main.ts`: Phaser scenes, responsive engine UI, input, themes, and timers.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
 - `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
-- `src/input.ts`: queen tap/double-tap and drag gesture state.
+- `src/input.ts`: Sudoku note cleanup and Queens tap/double-tap and drag gesture state.
 - `src/tutorials.ts`: rules walkthroughs, visible-board highlights, and device first-visit flags.
 - `src/pwa.ts`: installation prompts, service worker registration, and offline status.
 - `src/service-worker.js`: offline cache lifecycle; Vite injects the build hash and asset list.
 - `public/manifest.webmanifest` / `public/icons/`: phone installation metadata and icons.
 - `src/storage.ts`: dates, feature rotation, durations, and local persistence.
-- `tests/puzzles_test.ts`: puzzle and persistence regression coverage.
+- `tests/`: generation, validation, persistence, gesture, note, and tutorial regression coverage.
 - `server.ts`: production static server, cache headers, and health endpoint.
 - `Dockerfile` / `compose.yaml`: standalone container hosting.
 
@@ -232,37 +243,27 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-Tutorial tests cover all twelve games, daily/practice seeds, in-bounds highlights, no solution
-access, and per-game seen flags with persistent, damaged and unavailable storage. Browser checks
-cover first visits, replay, navigation, paused time, protected progress and responsive layouts.
+The current code passes **27 regression tests**, TypeScript checking, lint, and a production build.
+Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
-PWA checks cover Chrome installability, all twelve puzzles offline, saved notes and completion after
-offline reload and a full browser restart, waiting updates, old assets remaining available during
-an update, and cache cleanup after activation. The updated app also reopens offline with saved
-progress intact. Physical iPhone installation still requires checking on the device.
+The regression suite covers deterministic generation, uniqueness where required, rule validation,
+dates and progress storage, Sudoku note cleanup, Queens gestures, tutorial flags, and highlight
+bounds. Nurikabe's teaching examples are checked by the same validator as the game. Tutorial tests
+also prevent access to hidden puzzle solutions.
 
-The initial implementation passed type checking, lint, eight regression tests, and a production
-build. A separate full-year sweep generated and validated **3,285 puzzles (all nine games for every
-day of 2027)**. Browser checks cover phone and desktop rendering, Regional Queens completion, saved
-completion after reload, Sudoku notes and keyboard entry, Atoms single/double bonds and undo, Mosaic
-shading, Number Path dragging, and Shikaku rectangles.
+Browser checks cover all twelve tutorials at phone, landscape, and desktop sizes; first visits,
+replay, daily/practice flags, paused time, and unchanged puzzle progress. Input checks include
+Sudoku multi-cell notes and single-note double taps, disabled completed digits, undo/redo, touch
+feedback, and saved daily completion.
 
-Gesture regression coverage includes single/double taps, fast drags, preserving queens, revisiting
-cells, cancellation, and grouped undo. Browser checks also cover touch feedback across all nine
-games, reduced motion, multiple fingers, and completing Queens by double-tap.
+Production PWA checks cover Chrome installability, offline reload and browser restart, saved
+progress, waiting updates, failed-update recovery, and cache cleanup. Physical iPhone installation
+has not been verified on a device.
 
-The twelve-game collection passes type checking, lint, **21 regression tests**, and a production
-build. A further full-year sweep generated **1,095 new puzzles** (365 per added game), checking
-every solution's validity and uniqueness. The original nine puzzle payloads remain unchanged.
-Browser checks cover the three added games on phone and desktop in light and night modes, touch
-playthroughs, Five Cells border drawing/erasing and grouped undo/redo, keyboard borders, saved daily
-completion, next-puzzle controls, and the calendar's nine-to-twelve-game transition.
-
-The production Deno server was checked directly. The Dockerfile also builds successfully with Podman
-for `linux/amd64` on an Apple Silicon host. Container verification covers non-root operation, a
-read-only filesystem, dropped capabilities, the image health check, HTML and bundled assets, cache
-headers, and invalid request handling. The container passed at a 256 MiB memory limit; a 128 MiB
-limit caused an OOM during startup under amd64 emulation.
+The Dockerfile has been built and tested with Podman for `linux/amd64` on Apple Silicon. The
+container passes health and asset checks with a non-root user, read-only filesystem, dropped
+capabilities, and a 256 MiB memory limit. Deployment checks verify the running image, public assets,
+and offline loading.
 
 ## License and third-party software
 
