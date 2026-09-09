@@ -131,7 +131,10 @@ reduced-motion setting, this becomes a stationary highlight.
 
 - **Sudoku / Killer:** tap a cell, then use the keypad or 1–9. `N` toggles notes; Backspace/Delete
   clears. Fixed clues cannot be edited. Conflicting digits are highlighted without revealing the
-  answer.
+  answer. Drag across cells to select several and automatically enable notes. A keypad digit adds
+  that note to every selected empty cell, or removes it when they all already contain it. Existing
+  answers and fixed clues stay intact during bulk note entry. Each batch is one undo step. Tap a
+  cell or use an arrow to return to a single selection; turning notes off also selects one cell.
 - **Pipes:** tap to rotate clockwise.
 - **Atoms:** tap midway between two atoms to cycle no bond → one line → two lines. With a keyboard,
   select an atom with arrows, then Shift + an arrow cycles its bond.
@@ -145,7 +148,8 @@ reduced-motion setting, this becomes a stationary highlight.
   it. Invalid rectangles are rejected with a short message.
 - **Number Path:** drag or tap adjacent cells. Tap an earlier path cell to backtrack.
 - **Dosun-Fuwari:** tap to cycle balloon → weight → X note → clear. Rocks are fixed; X notes are
-  optional. Arrows and Space work too.
+  optional and unused squares can stay blank. Balloons are white balloon shapes; weights are black
+  with a wider base, in both themes. Arrows and Space work too.
 - **Nurikabe:** tap to cycle sea → island dot → clear. Numbered cells are fixed land. Mark all other
   cells to finish; arrows and Space also work.
 - **Five Cells:** tap an internal grid edge to add/remove a border. Drag along grid lines to draw or

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import "./style.css";
 import { fiveRegions } from "./extra-puzzles.ts";
-import { QueensInput } from "./input.ts";
+import { gridLine, QueensInput } from "./input.ts";
 import {
   adjacent,
   generate,
@@ -78,9 +78,11 @@ class Daybook extends Phaser.Scene {
   night = savedSettings?.night ?? (new Date().getHours() >= 19 || new Date().getHours() < 7);
   showTimer = savedSettings?.timer ?? true;
   modal: Modal = null;
+  helpPage = 0;
   puzzle?: Puzzle;
   progress?: Progress;
   selected = -1;
+  selectedCells = new Set<number>();
   notes = false;
   history: { values: number[]; notes: Record<number, number[]> }[] = [];
   redoHistory: { values: number[]; notes: Record<number, number[]> }[] = [];
@@ -197,6 +199,10 @@ class Daybook extends Phaser.Scene {
       const i = this.cellAt(p);
       if (i >= 0 && i !== this.pointerLast && !this.progress?.completed) {
         this.pointerDragged = true;
+        if (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") {
+          this.extendSudokuSelection(i);
+          return;
+        }
         this.pointerLast = i;
         if (this.puzzle?.kind === "queens") {
           const marks = this.queensInput.move(i, this.progress!.values, this.puzzle.size);
@@ -220,6 +226,10 @@ class Daybook extends Phaser.Scene {
       if (this.boardPointerId >= 0 && p.id !== this.boardPointerId) return;
       if (this.page === "game" && !this.modal && !this.progress?.completed) {
         const i = this.cellAt(p);
+        if (
+          (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") &&
+          this.pointerStart >= 0 && i >= 0 && i !== this.pointerLast
+        ) this.extendSudokuSelection(i);
         if (this.puzzle?.kind === "queens") this.queensInput.end(i, performance.now());
         if (this.puzzle?.kind === "shikaku" && i >= 0 && this.pointerStart >= 0) {
           if (i !== this.pointerStart) this.placeRectangle(this.pointerStart, i);
@@ -775,8 +785,8 @@ class Daybook extends Phaser.Scene {
     if (kind === "dosun") {
       this.box(cx - 25, cy - 25, 50, 50, this.pale(kind), color, 3);
       this.line(cx, cy - 25, cx, cy + 25, color);
-      this.circle(cx - 12, cy - 13, 8, this.C.panel, color);
-      this.circle(cx + 12, cy + 13, 8, color);
+      this.dosunPiece(cx - 12, cy - 12, 30, 1);
+      this.dosunPiece(cx + 12, cy + 12, 30, 2);
     } else if (kind === "nurikabe") {
       for (let r = 0; r < 4; r++) {
         for (let c = 0; c < 4; c++) {
@@ -799,6 +809,31 @@ class Daybook extends Phaser.Scene {
         this.box(cx - 25 + c * 17, cy - 25 + r * 17, 16, 16, this.pale(kind), color, 1)
       );
       this.text(cx, cy, "2", 12, color).setOrigin(.5);
+    }
+  }
+  dosunPiece(x: number, y: number, s: number, value: number) {
+    const dark = 0x242824, white = this.night ? 0xd8d8c9 : 0xfdfcf8;
+    const g = this.add.graphics();
+    if (value === 1) {
+      g.lineStyle(Math.max(1, s * .018), this.night ? white : dark);
+      g.beginPath().moveTo(x, y + s * .17).lineTo(x - s * .035, y + s * .25)
+        .lineTo(x + s * .02, y + s * .32).strokePath();
+      g.fillStyle(white).lineStyle(Math.max(1, s * .018), dark);
+      g.fillEllipse(x, y - s * .065, s * .38, s * .46);
+      g.strokeEllipse(x, y - s * .065, s * .38, s * .46);
+      g.fillTriangle(x, y + s * .13, x - s * .045, y + s * .19, x + s * .045, y + s * .19);
+    } else if (value === 2) {
+      const edge = this.night ? this.C.muted : dark;
+      g.lineStyle(Math.max(2, s * .035), edge)
+        .strokeRoundedRect(x - s * .08, y - s * .23, s * .16, s * .17, s * .045);
+      const corners = [
+        { x: x - s * .14, y: y - s * .12 },
+        { x: x + s * .14, y: y - s * .12 },
+        { x: x + s * .25, y: y + s * .23 },
+        { x: x - s * .25, y: y + s * .23 },
+      ];
+      g.fillStyle(dark).fillPoints(corners, true);
+      g.lineStyle(Math.max(1, s * .015), edge).strokePoints(corners, true);
     }
   }
   queen(x: number, y: number, s: number, color: number) {
@@ -984,13 +1019,14 @@ class Daybook extends Phaser.Scene {
     this.page = "game";
     this.modal = null;
     this.selected = -1;
+    this.selectedCells.clear();
     this.rectStart = -1;
     this.history = [];
     this.redoHistory = [];
     this.notes = false;
     this.scrollY = 0;
     this.draw();
-    this.announce(`${META[kind].name}. ${META[kind].rules}`);
+    this.announce(`${META[kind].name}. ${META[kind].rules.join(" ")}`);
   }
   drawGame() {
     if (!this.puzzle || !this.progress) return;
@@ -1084,7 +1120,7 @@ class Daybook extends Phaser.Scene {
         p.kind === "sudoku" || p.kind === "killer" ? (this.notes ? "Notes on" : "Notes") : "Reset",
         () => {
           if (p.kind === "sudoku" || p.kind === "killer") {
-            this.notes = !this.notes;
+            this.toggleNotes();
             this.draw();
           } else {
             this.modal = "reset";
@@ -1095,6 +1131,7 @@ class Daybook extends Phaser.Scene {
         this.progress.completed,
       );
       this.button(bx + (bw + 8) * 2, ty, bw, 40, "Rules", () => {
+        this.helpPage = 0;
         this.modal = "help";
         this.draw();
       });
@@ -1135,8 +1172,8 @@ class Daybook extends Phaser.Scene {
       }
       const helpY = this.showTimer ? by + 108 : by - 5;
       this.text(sx, helpY, "HOW TO PLAY", 10, c.accent).setLetterSpacing(1.5);
-      const rules = this.text(sx, helpY + 26, META[p.kind].rules, 14, c.muted, undefined, sw);
-      const controlsY = Math.max(helpY + 193, rules.y + rules.height + 24);
+      const rulesHeight = this.drawRules(sx, helpY + 26, sw, META[p.kind].rules);
+      const controlsY = Math.max(helpY + 193, helpY + 26 + rulesHeight + 24);
       if (p.kind === "sudoku" || p.kind === "killer") {
         this.keypad(bx, bottom + 20, size, 42);
       }
@@ -1169,7 +1206,7 @@ class Daybook extends Phaser.Scene {
         notePuzzle ? (this.notes ? "Notes on" : "Notes") : "Reset",
         () => {
           if (notePuzzle) {
-            this.notes = !this.notes;
+            this.toggleNotes();
             this.draw();
           } else {
             this.modal = "reset";
@@ -1223,7 +1260,7 @@ class Daybook extends Phaser.Scene {
     switch (kind) {
       case "sudoku":
       case "killer":
-        return "Select a square · 1–9 to fill · N for notes · Backspace to clear";
+        return "Drag across squares for notes · 1–9 to fill · N for notes · Backspace to clear";
       case "pipes":
         return "Tap to rotate. Bring every pipe into the flow.";
       case "atoms":
@@ -1239,7 +1276,7 @@ class Daybook extends Phaser.Scene {
       case "mosaic":
         return "Tap to shade, mark empty, or clear. Count each 3 × 3 neighborhood.";
       case "dosun":
-        return "Tap: balloon → weight → X → clear. One of each piece per region.";
+        return "Tap: balloon → weight → X → clear. X marks are optional.";
       case "nurikabe":
         return "Tap: sea → island dot → clear. Keep one connected sea, without 2 × 2 pools.";
       case "fivecells":
@@ -1318,7 +1355,10 @@ class Daybook extends Phaser.Scene {
         ) fill = blend(c.panel, c.soft, .65);
         if (this.selected >= 0 && a[this.selected] > 0 && a[i] === a[this.selected]) fill = c.soft;
       }
-      if ((this.selected === i && p.kind !== "snap") || activeRegion.includes(i)) {
+      if (
+        (this.selected === i && p.kind !== "snap") || activeRegion.includes(i) ||
+        ((p.kind === "sudoku" || p.kind === "killer") && this.selectedCells.has(i))
+      ) {
         fill = blend(fill, c.accent, .17);
       }
       this.add.graphics().fillStyle(fill).fillRect(xx, yy, s, s);
@@ -1351,8 +1391,7 @@ class Daybook extends Phaser.Scene {
           this.add.graphics().lineStyle(1, this.night ? c.muted : c.panel, .6)
             .lineBetween(xx + s * .2, yy + s * .8, xx + s * .8, yy + s * .2);
         } else {
-          if (a[i] === 1) this.circle(xx + s / 2, yy + s / 2, s * .22, c.panel, c.ink);
-          if (a[i] === 2) this.circle(xx + s / 2, yy + s / 2, s * .22, c.ink);
+          if (a[i] === 1 || a[i] === 2) this.dosunPiece(xx + s / 2, yy + s / 2, s, a[i]);
           if (a[i] === 3) this.text(xx + s / 2, yy + s / 2, "×", s * .4, c.muted).setOrigin(.5);
           this.text(
             xx + 4,
@@ -1477,8 +1516,14 @@ class Daybook extends Phaser.Scene {
       }
     }
     if (this.selected >= 0 && p.kind !== "fivecells") {
-      const xx = x + this.selected % n * s, yy = y + (this.selected / n | 0) * s;
-      this.add.graphics().lineStyle(2, c.accent).strokeRect(xx + 1, yy + 1, s - 2, s - 2);
+      const selection = (p.kind === "sudoku" || p.kind === "killer") && this.selectedCells.size
+        ? this.selectedCells
+        : [this.selected];
+      const outline = this.add.graphics().lineStyle(2, c.accent);
+      for (const i of selection) {
+        const xx = x + i % n * s, yy = y + (i / n | 0) * s;
+        outline.strokeRect(xx + 1, yy + 1, s - 2, s - 2);
+      }
     }
   }
   numberConflict(i: number) {
@@ -1725,6 +1770,7 @@ class Daybook extends Phaser.Scene {
       this.progress!.completedAt = new Date().toISOString();
       this.modal = null;
       this.selected = -1;
+      this.selectedCells.clear();
       this.announce(
         `${META[this.puzzle!.kind].name} complete. Time ${formatTime(this.progress!.elapsed)}.`,
       );
@@ -1744,6 +1790,7 @@ class Daybook extends Phaser.Scene {
       return;
     }
     if (p.kind === "sudoku" || p.kind === "killer") {
+      this.selectedCells = new Set([i]);
       this.draw();
       this.announce(
         `Row ${1 + (i / 9 | 0)}, column ${i % 9 + 1}, ${a[i] || "empty"}${
@@ -1844,23 +1891,46 @@ class Daybook extends Phaser.Scene {
     cells.forEach((i) => values[i] = id);
     this.changed();
   }
+  extendSudokuSelection(i: number) {
+    const added = gridLine(this.pointerLast, i, this.puzzle!.size)
+      .filter((cell) => !this.selectedCells.has(cell));
+    added.forEach((cell) => this.selectedCells.add(cell));
+    this.pointerLast = this.selected = i;
+    if (this.selectedCells.size > 1) this.notes = true;
+    this.draw();
+    added.forEach((cell) => this.cellFeedback(cell));
+    this.announce(`${this.selectedCells.size} squares selected. Notes on.`);
+  }
+  toggleNotes() {
+    this.notes = !this.notes;
+    if (!this.notes) {
+      this.selectedCells = new Set(this.selected >= 0 ? [this.selected] : []);
+    }
+  }
   enterNumber(v: number) {
     if (
       this.selected < 0 || !this.progress || this.progress.completed || this.modal || !this.puzzle
     ) return;
     if (this.puzzle.kind !== "sudoku" && this.puzzle.kind !== "killer") return;
-    const i = this.selected;
-    if (this.puzzle.initial[i]) return;
+    const bulkNotes = this.notes && v !== 0 && this.selectedCells.size > 1;
+    const cells = [...(this.selectedCells.size ? this.selectedCells : [this.selected])]
+      .filter((i) => !this.puzzle!.initial[i] && (!bulkNotes || !this.progress!.values[i]));
+    if (!cells.length) return;
     this.snapshot();
     if (this.notes && v) {
-      if (this.progress.values[i]) this.progress.values[i] = 0;
-      const notes = this.progress.notes[i] || [];
-      this.progress.notes[i] = notes.includes(v)
-        ? notes.filter((n) => n !== v)
-        : [...notes, v].sort();
+      const remove = cells.every((i) => this.progress!.notes[i]?.includes(v));
+      for (const i of cells) {
+        this.progress.values[i] = 0;
+        const notes = this.progress.notes[i] || [];
+        this.progress.notes[i] = remove
+          ? notes.filter((n) => n !== v)
+          : [...new Set([...notes, v])].sort();
+      }
     } else {
-      this.progress.values[i] = v;
-      delete this.progress.notes[i];
+      for (const i of cells) {
+        this.progress.values[i] = v;
+        delete this.progress.notes[i];
+      }
     }
     this.changed();
   }
@@ -1930,7 +2000,7 @@ class Daybook extends Phaser.Scene {
       return;
     }
     if (e.key.toLowerCase() === "n") {
-      this.notes = !this.notes;
+      this.toggleNotes();
       this.draw();
       return;
     }
@@ -1963,6 +2033,7 @@ class Daybook extends Phaser.Scene {
         return;
       }
       this.selected = this.selected < 0 ? 0 : adjacent(old, n).includes(target) ? target : old;
+      this.selectedCells = new Set([this.selected]);
       this.draw();
       this.announce(`Row ${1 + (this.selected / n | 0)}, column ${1 + this.selected % n}`);
       return;
@@ -2028,13 +2099,79 @@ class Daybook extends Phaser.Scene {
       .lineStyle(1, c.line).strokeRoundedRect(x, y, w, height, 12);
     return height;
   }
+  ruleText(x: number, y: number, w: number, rule: string, first: boolean) {
+    return this.text(x, y, rule, 14, first ? this.C.ink : this.C.muted, undefined, w)
+      .setFontStyle(first ? "bold" : "normal");
+  }
+  drawRules(x: number, y: number, w: number, rules: string[], start = 0) {
+    let top = y;
+    rules.forEach((rule, i) => {
+      this.circle(x + 3, top + 8, 2.5, this.C.accent);
+      const text = this.ruleText(x + 18, top, w - 18, rule, start + i === 0);
+      top += text.height + 10;
+    });
+    return top - y - 10;
+  }
+  drawHelp() {
+    const c = this.C, w = Math.min(this.W - 32, 460), pad = 24;
+    const title = `How to play ${META[this.puzzle!.kind].name}`;
+    const measure = this.text(0, 0, title, 24, c.ink, "Georgia", w - pad * 2);
+    const header = 24 + measure.height + 20;
+    measure.destroy();
+    const space = Math.max(40, this.H - 32 - header - 100);
+    const pages: { rules: string[]; start: number; height: number }[] = [];
+    let current = { rules: [] as string[], start: 0, height: 0 };
+    META[this.puzzle!.kind].rules.forEach((rule, i) => {
+      const text = this.ruleText(0, 0, w - pad * 2 - 18, rule, i === 0);
+      const height = text.height;
+      text.destroy();
+      if (current.rules.length && current.height + 10 + height > space) {
+        pages.push(current);
+        current = { rules: [], start: i, height: 0 };
+      }
+      current.height += (current.rules.length ? 10 : 0) + height;
+      current.rules.push(rule);
+    });
+    pages.push(current);
+    this.helpPage = Phaser.Math.Clamp(this.helpPage, 0, pages.length - 1);
+    const page = pages[this.helpPage], h = header + page.height + 100;
+    const x = (this.W - w) / 2, y = (this.H - h) / 2;
+    this.controls = [];
+    this.focused = -1;
+    this.add.rectangle(0, 0, this.W, this.H, c.bg, .96).setOrigin(0).setInteractive();
+    this.box(x, y, w, h, c.panel, c.line, 16);
+    this.text(x + pad, y + 24, title, 24, c.ink, "Georgia", w - pad * 2);
+    this.drawRules(x + pad, y + header, w - pad * 2, page.rules, page.start);
+    const close = () => {
+      this.modal = null;
+      this.draw();
+    };
+    if (pages.length === 1) {
+      this.button(x + pad, y + h - 64, w - pad * 2, 42, "Got it", close, true);
+    } else {
+      this.text(x + pad, y + h - 91, `${this.helpPage + 1} of ${pages.length}`, 12, c.muted);
+      const bw = (w - pad * 2 - 16) / 3;
+      this.button(x + pad, y + h - 64, bw, 42, "Previous", () => {
+        this.helpPage--;
+        this.draw();
+      }, false, this.helpPage === 0);
+      this.button(x + pad + bw + 8, y + h - 64, bw, 42, "Next", () => {
+        this.helpPage++;
+        this.draw();
+      }, false, this.helpPage === pages.length - 1);
+      this.button(x + pad + (bw + 8) * 2, y + h - 64, bw, 42, "Got it", close, true);
+    }
+  }
   drawModal() {
+    if (this.modal === "help") {
+      this.drawHelp();
+      return;
+    }
     const c = this.C,
       type = this.modal!,
       isSettings = type === "settings",
-      isHelp = type === "help",
       w = Math.min(this.W - 32, 460),
-      h = isHelp ? 400 : isSettings ? 410 : 280,
+      h = isSettings ? 410 : 280,
       x = (this.W - w) / 2,
       y = (this.H - h) / 2;
     this.controls = [];
@@ -2080,24 +2217,18 @@ class Daybook extends Phaser.Scene {
       }, true);
       return;
     }
-    const name = this.puzzle ? META[this.puzzle.kind].name : "";
     this.text(
       x + pad,
       y + 28,
-      isHelp ? `How to play ${name}` : type === "reset" ? "A fresh start?" : "Take a breath.",
+      type === "reset" ? "A fresh start?" : "Take a breath.",
       28,
       c.ink,
       "Georgia",
       w - pad * 2,
     );
-    let body = isHelp
-      ? META[this.puzzle!.kind].rules
-      : type === "reset"
+    const body = type === "reset"
       ? "Clear your entries and notes for this puzzle. Your solving time will continue."
       : "Your puzzle is waiting right here.\nThe timer is paused.";
-    if (isHelp && this.puzzle!.kind === "atoms") {
-      body += " Keyboard: select an atom with arrows; hold Shift + an arrow to cycle that bond.";
-    }
     this.text(x + pad, y + 90, body, 15, c.muted, undefined, w - pad * 2);
     if (type === "reset") {
       this.button(x + pad, y + h - 62, (w - pad * 2 - 10) / 2, 40, "Keep going", () => {
@@ -2119,7 +2250,7 @@ class Daybook extends Phaser.Scene {
         y + h - 64,
         w - pad * 2,
         42,
-        isHelp ? "Got it" : "Whenever you’re ready",
+        "Whenever you’re ready",
         () => {
           this.modal = null;
           this.draw();

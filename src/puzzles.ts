@@ -34,7 +34,7 @@ export const META: Record<
     name: string;
     category: string;
     description: string;
-    rules: string;
+    rules: string[];
     color: number;
     pale: number;
   }
@@ -43,8 +43,13 @@ export const META: Record<
     name: "Sudoku",
     category: "THE CLASSIC",
     description: "A place for every number.",
-    rules:
-      "Fill each row, column, and 3 × 3 box with the numbers 1–9, once each. Select a cell and use the number keys or the keypad. Notes toggle pencil marks. Backspace clears a cell.",
+    rules: [
+      "Fill every row, column, and 3 × 3 box with 1–9, using each number exactly once.",
+      "Fixed clues cannot be changed.",
+      "Select a cell, then tap a keypad number or press 1–9.",
+      "Drag across cells to select several and turn on notes. A number adds that note to all selected empty cells.",
+      "N toggles notes. Backspace or the × button clears your selected entries.",
+    ],
     color: 0x566b51,
     pale: 0xe9eee3,
   },
@@ -52,8 +57,12 @@ export const META: Record<
     name: "Pipes",
     category: "FIND THE FLOW",
     description: "A twist. A turn. A connection.",
-    rules:
-      "Tap a pipe to rotate it clockwise. Connect every pipe and every endpoint to the filled water source. Every opening must meet another pipe: no leaks, no loose ends. Blue pipes are connected to the source.",
+    rules: [
+      "Connect every pipe and endpoint to the filled water source.",
+      "Every pipe opening must meet another pipe: no leaks or loose ends.",
+      "Tap a pipe to rotate it clockwise.",
+      "Blue pipes are connected to the source.",
+    ],
     color: 0x49777b,
     pale: 0xe6efed,
   },
@@ -61,8 +70,13 @@ export const META: Record<
     name: "Atoms",
     category: "MAKE A CONNECTION",
     description: "Little bonds. One molecule.",
-    rules:
-      "Tap the space between neighboring atoms to cycle no bond, one line, or two lines. Each atom needs exactly the number of bonds printed inside it. Connect all atoms into one molecule. These are abstract bond puzzles, not chemical models.",
+    rules: [
+      "Connect all atoms into one connected network.",
+      "Each atom needs exactly the number of bonds printed inside it.",
+      "Bonds join orthogonally adjacent atoms. One line counts as one bond; two lines count as two.",
+      "Tap between neighboring atoms to cycle no bond → one line → two lines.",
+      "Keyboard: arrows select an atom; Shift + an arrow cycles its bond.",
+    ],
     color: 0x8a684c,
     pale: 0xf3eadd,
   },
@@ -70,8 +84,14 @@ export const META: Record<
     name: "Killer Sudoku",
     category: "THE SUM OF THINGS",
     description: "The classic, with a little extra.",
-    rules:
-      "Use the usual Sudoku rules: 1–9 in each row, column, and 3 × 3 box. Each outlined cage must add to its small corner number, with no repeated digit inside a cage. Notes and number keys work here too.",
+    rules: [
+      "Fill every row, column, and 3 × 3 box with 1–9, using each number exactly once.",
+      "The numbers in each outlined cage must add up to its small corner clue.",
+      "A digit cannot repeat within a cage. Fixed clues cannot be changed.",
+      "Select a cell, then tap a keypad number or press 1–9.",
+      "Drag across cells to select several and turn on notes. Numbers add notes to every selected empty cell.",
+      "N toggles notes. Backspace or the × button clears your selected entries.",
+    ],
     color: 0x8b6266,
     pale: 0xf2e5e4,
   },
@@ -79,8 +99,14 @@ export const META: Record<
     name: "Regional Queens",
     category: "A LITTLE STRATEGY",
     description: "Give every queen her space.",
-    rules:
-      "Place one queen in each row, column, and colored region. Queens cannot touch, even diagonally. Click or tap once to mark a large X; drag across cells to mark several. Double-click or double-tap a cell to place a queen. Tap any mark to clear it. Dragging preserves queens. Crosses are your own notes. With a keyboard, arrows select and Space cycles empty → queen → X → empty.",
+    rules: [
+      "Place exactly one queen in each row, column, and colored region.",
+      "Queens cannot touch, including diagonally.",
+      "Double-click or double-tap to place a queen. Tap a mark to clear it.",
+      "Single-click or tap to mark an X; drag to mark several. Dragging preserves queens.",
+      "X marks are optional notes.",
+      "Keyboard: arrows select; Space cycles empty → queen → X → empty.",
+    ],
     color: 0x807198,
     pale: 0xede8f2,
   },
@@ -88,8 +114,13 @@ export const META: Record<
     name: "Shikaku",
     category: "DIVIDE & DISCOVER",
     description: "Everything in its own rectangle.",
-    rules:
-      "Divide the entire grid into rectangles. Every rectangle contains exactly one clue and its area equals that number. Drag between opposite corners, or tap one corner then the other. Tap a finished rectangle to remove it.",
+    rules: [
+      "Cover the entire grid with rectangles, without gaps or overlaps.",
+      "Every rectangle must contain exactly one numbered clue.",
+      "Its number of cells must equal that clue.",
+      "Drag between opposite corners, or tap one corner and then the other.",
+      "Tap a placed rectangle to remove it.",
+    ],
     color: 0x9a7c3c,
     pale: 0xf3eedb,
   },
@@ -97,8 +128,13 @@ export const META: Record<
     name: "Number Path",
     category: "FOLLOW THE THREAD",
     description: "One line to bring it all together.",
-    rules:
-      "Start at 1 and draw a single path through the numbered dots in order. Visit every square exactly once and finish at the last number. Drag or tap adjacent squares. Tap an earlier part of your path to backtrack.",
+    rules: [
+      "Draw one path that visits every square exactly once.",
+      "Start at 1, visit the numbered dots in order, and finish at the last number.",
+      "Move between squares that share an edge.",
+      "Drag or tap adjacent squares to extend the path.",
+      "Tap an earlier square on your path to backtrack.",
+    ],
     color: 0x4e7a67,
     pale: 0xe4eee6,
   },
@@ -106,8 +142,13 @@ export const META: Record<
     name: "Balance",
     category: "FIND YOUR BALANCE",
     description: "Two shapes. A perfect balance.",
-    rules:
-      "Fill each row and column with three circles and three diamonds. Never place three of the same shape in a row horizontally or vertically. = means neighboring shapes match; × means they differ. Tap to cycle circle → diamond → empty.",
+    rules: [
+      "Fill each row and column with three circles and three diamonds.",
+      "Never place three identical shapes consecutively, horizontally or vertically.",
+      "= means the neighboring shapes must match.",
+      "× means the neighboring shapes must differ.",
+      "Tap to cycle circle → diamond → empty.",
+    ],
     color: 0xa46548,
     pale: 0xf4e7db,
   },
@@ -115,8 +156,13 @@ export const META: Record<
     name: "Mosaic",
     category: "PIECE BY PIECE",
     description: "A small picture in the numbers.",
-    rules:
-      "Shade squares so each number equals the shaded squares in its surrounding 3 × 3 neighborhood, including its own square. At edges, count only squares inside the grid. Tap to cycle shaded → marked empty → undecided. Mark every square to finish. A red clue means too many shaded squares, or too few once every square in its neighborhood is decided.",
+    rules: [
+      "Each clue must equal the number of shaded squares in its surrounding 3 × 3 area.",
+      "Include the clue’s own square. At the edges, count only squares inside the grid.",
+      "Tap to cycle shaded → marked empty → undecided.",
+      "Decide every square to finish, including unshaded squares.",
+      "A red clue means too much shading, or too little once its entire neighborhood is decided.",
+    ],
     color: 0x6b7d8b,
     pale: 0xe3e9ef,
   },
@@ -124,8 +170,15 @@ export const META: Record<
     name: "Dosun-Fuwari",
     category: "RISE & REST",
     description: "A little lift. A little gravity.",
-    rules:
-      "Put one hollow balloon and one solid weight in every outlined region. A balloon needs the top edge, a rock, or another balloon directly above it. A weight needs the bottom edge, a rock, or another weight directly below. Region borders do not provide support. Tap to cycle balloon → weight → X note → clear. Rocks cannot be changed.",
+    rules: [
+      "Place one white balloon and one black weight in every outlined region.",
+      "A balloon needs the top edge, a rock, or another balloon directly above it.",
+      "A weight needs the bottom edge, a rock, or another weight directly below it.",
+      "Region borders do not support balloons or weights.",
+      "Tap to cycle balloon → weight → X note → clear.",
+      "X marks are optional. Unused squares can stay blank.",
+      "Rocks cannot be changed.",
+    ],
     color: 0x86734f,
     pale: 0xeee8da,
   },
@@ -133,8 +186,14 @@ export const META: Record<
     name: "Nurikabe",
     category: "ISLANDS & SEA",
     description: "Find the shape of the shoreline.",
-    rules:
-      "Each number belongs to an island of exactly that many cells, joined along their sides. Each island contains one number; different islands cannot share an edge. Shade every other cell as sea. The sea must connect along its sides, without any solid 2 × 2 sea squares. Tap to cycle sea → island dot → clear. Numbered cells stay land. Decide every square to finish.",
+    rules: [
+      "Each numbered island must contain exactly as many cells as its clue.",
+      "An island’s cells must connect along their sides and contain exactly one clue.",
+      "Different islands cannot share an edge.",
+      "Shade every other cell as one connected sea. No solid 2 × 2 sea squares are allowed.",
+      "Tap to cycle sea → island dot → clear. Numbered cells stay land.",
+      "Decide every square to finish.",
+    ],
     color: 0x567b85,
     pale: 0xdfeaec,
   },
@@ -142,8 +201,14 @@ export const META: Record<
     name: "Five Cells",
     category: "FIVE AT A TIME",
     description: "Little shapes. A perfect fit.",
-    rules:
-      "Draw borders to divide the grid into connected groups of exactly five cells. A clue counts the bordering sides of its cell, including the outer frame. A group can contain any number of clues. Do not leave extra lines inside a group. Tap an internal grid edge to add or remove a border; drag along edges to draw several. With a keyboard, arrows select a cell and Shift + an arrow toggles that side.",
+    rules: [
+      "Every region must contain exactly five cells.",
+      "Cells in a region must connect along their sides. Cover the entire grid.",
+      "Each clue counts the bordering sides of its cell, including the outer frame.",
+      "A region can contain any number of clues. Do not leave extra borders inside a region.",
+      "Tap an internal grid edge to add or remove a border. Drag along edges to draw several.",
+      "Keyboard: arrows select a cell; Shift + an arrow toggles its shared border.",
+    ],
     color: 0x816777,
     pale: 0xeee1e8,
   },
