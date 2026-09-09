@@ -161,6 +161,11 @@ reduced-motion setting, this becomes a stationary highlight.
   that note to every selected empty cell, or removes it when they all already contain it. Existing
   answers and fixed clues stay intact during bulk note entry. Each batch is one undo step. Tap a
   cell or use an arrow to return to a single selection; turning notes off also selects one cell.
+  Placing an answer removes notes that conflict with written numbers in the same row, column,
+  box, or Killer cage. Undo restores the entry and its removed notes together.
+  Double-tap or double-click a cell with exactly one note to fill its number, even with notes on.
+  Digits with nine placed copies turn gray and cannot be entered from the keypad or keyboard;
+  clearing or undoing an entry enables them again.
 - **Pipes:** tap to rotate clockwise.
 - **Atoms:** tap midway between two atoms to cycle no bond → one line → two lines. With a keyboard,
   select an atom with arrows, then Shift + an arrow cycles its bond.

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import "./style.css";
 import { fiveRegions } from "./extra-puzzles.ts";
-import { gridLine, QueensInput } from "./input.ts";
+import { gridLine, pruneSudokuNotes, QueensInput } from "./input.ts";
 import { installDaybook, pwa, startPwa } from "./pwa.ts";
 import {
   adjacent,
@@ -100,6 +100,8 @@ class Daybook extends Phaser.Scene {
   borderLastPoint?: { x: number; y: number };
   borderPaintValue = 1;
   queensInput = new QueensInput();
+  sudokuTap?: { index: number; time: number };
+  sudokuPointerTime = 0;
   handledKeys = new WeakSet<KeyboardEvent>();
   touchPulses: { x: number; y: number; radius: number; time: number }[] = [];
   touchGraphics?: Phaser.GameObjects.Graphics;
@@ -155,15 +157,18 @@ class Daybook extends Phaser.Scene {
       this.pointerStart = -1;
       if (this.page !== "game" || this.modal || this.progress?.completed) {
         this.queensInput.reset();
+        this.sudokuTap = undefined;
         return;
       }
       const i = this.cellAt(p);
       this.pointerStart = this.pointerLast = i;
       if (i < 0) {
         this.queensInput.reset();
+        this.sudokuTap = undefined;
         return;
       }
       this.boardPointerId = p.id;
+      this.sudokuPointerTime = performance.now();
       if (this.puzzle!.kind === "fivecells") {
         this.borderVisited.clear();
         this.borderLastPoint = undefined;
@@ -235,6 +240,19 @@ class Daybook extends Phaser.Scene {
           (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") &&
           this.pointerStart >= 0 && i >= 0 && i !== this.pointerLast
         ) this.extendSudokuSelection(i);
+        if (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") {
+          const now = performance.now(), previous = this.sudokuTap;
+          const tapped = i >= 0 && i === this.pointerStart && !this.pointerDragged &&
+            this.selectedCells.size === 1 && now - this.sudokuPointerTime <= 400;
+          this.sudokuTap = tapped ? { index: i, time: now } : undefined;
+          if (tapped && previous?.index === i && now - previous.time <= 320) {
+            this.sudokuTap = undefined;
+            const candidates = this.progress!.notes[i];
+            if (!this.progress!.values[i] && candidates?.length === 1) {
+              this.enterNumber(candidates[0], true);
+            }
+          }
+        }
         if (this.puzzle?.kind === "queens") this.queensInput.end(i, performance.now());
         if (this.puzzle?.kind === "shikaku" && i >= 0 && this.pointerStart >= 0) {
           if (i !== this.pointerStart) this.placeRectangle(this.pointerStart, i);
@@ -247,6 +265,7 @@ class Daybook extends Phaser.Scene {
     const cancelGesture = () => {
       this.pointerStart = this.boardPointerId = -1;
       this.queensInput.reset();
+      this.sudokuTap = undefined;
     };
     this.input.on("pointerupoutside", cancelGesture);
     this.game.canvas.addEventListener("touchcancel", cancelGesture);
@@ -1037,6 +1056,7 @@ class Daybook extends Phaser.Scene {
   }
   openGame(kind: Kind, seed: string) {
     this.queensInput.reset();
+    this.sudokuTap = undefined;
     this.pointerStart = this.boardPointerId = -1;
     this.persist();
     this.notice = "";
@@ -1328,7 +1348,7 @@ class Daybook extends Phaser.Scene {
         String(v),
         () => this.enterNumber(v),
         false,
-        this.progress?.completed,
+        this.progress?.completed || this.sudokuDigitDone(v),
       );
       digit.setFontSize(this.notes ? Math.min(18, Math.round(bw * .55)) : 24);
       if (this.notes) {
@@ -1940,17 +1960,21 @@ class Daybook extends Phaser.Scene {
       this.selectedCells = new Set(this.selected >= 0 ? [this.selected] : []);
     }
   }
-  enterNumber(v: number) {
+  sudokuDigitDone(v: number) {
+    return v > 0 && (this.progress?.values.filter((value) => value === v).length ?? 0) >= 9;
+  }
+  enterNumber(v: number, asAnswer = false) {
     if (
       this.selected < 0 || !this.progress || this.progress.completed || this.modal || !this.puzzle
     ) return;
     if (this.puzzle.kind !== "sudoku" && this.puzzle.kind !== "killer") return;
-    const bulkNotes = this.notes && v !== 0 && this.selectedCells.size > 1;
+    if (this.sudokuDigitDone(v)) return;
+    const bulkNotes = this.notes && !asAnswer && v !== 0 && this.selectedCells.size > 1;
     const cells = [...(this.selectedCells.size ? this.selectedCells : [this.selected])]
       .filter((i) => !this.puzzle!.initial[i] && (!bulkNotes || !this.progress!.values[i]));
     if (!cells.length) return;
     this.snapshot();
-    if (this.notes && v) {
+    if (this.notes && v && !asAnswer) {
       const remove = cells.every((i) => this.progress!.notes[i]?.includes(v));
       for (const i of cells) {
         this.progress.values[i] = 0;
@@ -1963,6 +1987,13 @@ class Daybook extends Phaser.Scene {
       for (const i of cells) {
         this.progress.values[i] = v;
         delete this.progress.notes[i];
+      }
+      if (v) {
+        this.progress.notes = pruneSudokuNotes(
+          this.progress.values,
+          this.progress.notes,
+          this.puzzle.kind === "killer" ? this.puzzle.cages : [],
+        );
       }
     }
     this.changed();
@@ -1993,6 +2024,7 @@ class Daybook extends Phaser.Scene {
     if (this.handledKeys.has(e)) return;
     this.handledKeys.add(e);
     this.queensInput.reset();
+    this.sudokuTap = undefined;
     if (e.key === "Tab") {
       e.preventDefault();
       this.focused = (this.focused + (e.shiftKey ? -1 : 1) + this.controls.length) %

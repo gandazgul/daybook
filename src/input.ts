@@ -1,3 +1,33 @@
+import type { Cage } from "./puzzles.ts";
+
+/** Remove pencil marks ruled out by entries, without changing the supplied undo state. */
+export function pruneSudokuNotes(
+  values: number[],
+  notes: Record<number, number[]>,
+  cages: Cage[] = [],
+): Record<number, number[]> {
+  const result: Record<number, number[]> = {};
+  for (const [key, candidates] of Object.entries(notes)) {
+    const i = Number(key);
+    if (values[i]) continue;
+    const row = Math.floor(i / 9), col = i % 9;
+    const blocked = new Set<number>();
+    for (let offset = 0; offset < 9; offset++) {
+      blocked.add(values[row * 9 + offset]);
+      blocked.add(values[offset * 9 + col]);
+      const boxRow = Math.floor(row / 3) * 3 + Math.floor(offset / 3);
+      const boxCol = Math.floor(col / 3) * 3 + offset % 3;
+      blocked.add(values[boxRow * 9 + boxCol]);
+    }
+    for (const cage of cages) {
+      if (cage.cells.includes(i)) cage.cells.forEach((cell) => blocked.add(values[cell]));
+    }
+    const remaining = candidates.filter((v) => !blocked.has(v));
+    if (remaining.length) result[i] = remaining;
+  }
+  return result;
+}
+
 /** Cells crossed between two sampled positions, including fast horizontal/vertical drags. */
 export function gridLine(from: number, to: number, size: number): number[] {
   let x = from % size, y = Math.floor(from / size);

@@ -1,4 +1,4 @@
-import { gridLine, QueensInput } from "../src/input.ts";
+import { gridLine, pruneSudokuNotes, QueensInput } from "../src/input.ts";
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -8,6 +8,24 @@ function equal(actual: unknown, expected: unknown) {
 function apply(values: number[], marks: { index: number; value: number }[]) {
   marks.forEach(({ index, value }) => values[index] = value);
 }
+
+Deno.test("Sudoku entries remove conflicting row, column and box notes, preserving other candidates", () => {
+  const values = Array(81).fill(0);
+  values[0] = 5;
+  const notes = { 0: [1, 5], 8: [5, 7], 72: [5], 10: [2, 5], 40: [5, 9] };
+  equal(pruneSudokuNotes(values, notes), { 8: [7], 10: [2], 40: [5, 9] });
+  equal(notes, { 0: [1, 5], 8: [5, 7], 72: [5], 10: [2, 5], 40: [5, 9] });
+  equal(values[0], 5);
+});
+
+Deno.test("Killer notes also respect cage peers outside the same row, column or box", () => {
+  const values = Array(81).fill(0);
+  values[20] = 5;
+  const notes = { 21: [5, 6], 30: [5, 7], 80: [5, 9] };
+  const cages = [{ cells: [20, 21, 30], sum: 15 }, { cells: [79, 80], sum: 10 }];
+  equal(pruneSudokuNotes(values, notes, cages), { 21: [6], 30: [7], 80: [5, 9] });
+  equal(pruneSudokuNotes(values, notes), { 21: [6], 30: [5, 7], 80: [5, 9] });
+});
 
 Deno.test("Queens single taps mark/clear; a double tap places a queen and merges undo", () => {
   const input = new QueensInput(), values = [0, 0];
