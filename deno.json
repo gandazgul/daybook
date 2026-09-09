@@ -2,12 +2,12 @@
   "nodeModulesDir": "auto",
   "imports": {
     "phaser": "npm:phaser@3.90.0",
-    "vite": "npm:vite@7.3.1"
+    "vite": "npm:vite@7.3.5"
   },
   "tasks": {
-    "dev": "deno run -A npm:vite@7.3.1 --host 0.0.0.0",
-    "build": "deno check src/main.ts && deno run -A npm:vite@7.3.1 build",
-    "preview": "deno run -A npm:vite@7.3.1 preview --host 0.0.0.0",
+    "dev": "deno run -A npm:vite@7.3.5 --host 0.0.0.0",
+    "build": "deno check src/main.ts && deno run -A npm:vite@7.3.5 build",
+    "preview": "deno run -A npm:vite@7.3.5 preview --host 0.0.0.0",
     "start": "deno run --allow-net --allow-read=dist --allow-env=PORT server.ts",
     "test": "deno test tests/",
     "check": "deno check src/main.ts server.ts && deno lint src tests server.ts"

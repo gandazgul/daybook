@@ -7,6 +7,7 @@ import {
   generate,
   isSolved,
   KINDS,
+  mosaicClueConflict,
   Random,
   rotate,
 } from "../src/puzzles.ts";
@@ -21,7 +22,7 @@ import {
 function assert(value: unknown, message = "Assertion failed"): asserts value {
   if (!value) throw new Error(message);
 }
-Deno.test("all nine generators produce playable, deterministic, solvable daily puzzles", () => {
+Deno.test("all generators produce playable, deterministic, solvable daily puzzles", () => {
   for (let day = 1; day <= 20; day++) {
     for (const kind of KINDS) {
       const p = generate(kind, `2026-09-${String(day).padStart(2, "0")}`);
@@ -152,4 +153,24 @@ Deno.test("damaged saved entries recover to an editable starting board", () => {
     };
     assert(JSON.stringify(new ProgressStore(disk).load(p).values) === JSON.stringify(p.initial));
   }
+});
+
+Deno.test("Mosaic clue feedback waits for decided neighborhoods and respects board edges", () => {
+  const values = Array(36).fill(0);
+  assert(!mosaicClueConflict(2, values, 0, 6), "untouched clue should stay neutral");
+  values[0] = 1;
+  assert(!mosaicClueConflict(2, values, 0, 6), "partial neighborhood should stay neutral");
+  assert(mosaicClueConflict(0, values, 0, 6), "count includes the clue's own shaded square");
+  values[1] = 1;
+  assert(mosaicClueConflict(1, values, 0, 6), "excess shading is an immediate conflict");
+  values[1] = values[6] = values[7] = 2;
+  assert(mosaicClueConflict(2, values, 0, 6), "a corner has only four real cells to decide");
+  assert(!mosaicClueConflict(1, values, 0, 6), "matching count should clear the conflict");
+  values[7] = 0;
+  assert(!mosaicClueConflict(2, values, 0, 6), "clearing an entry reopens the neighborhood");
+  assert(!mosaicClueConflict(-1, values, 0, 6), "cells without clues never conflict");
+  values.fill(2);
+  assert(mosaicClueConflict(3, values, 14, 6), "fully marked-empty neighborhood is too few");
+  values[7] = values[8] = values[9] = 1;
+  assert(!mosaicClueConflict(3, values, 14, 6), "correct interior count stays neutral");
 });

@@ -1,3 +1,11 @@
+import {
+  generateDosun,
+  generateFiveCells,
+  generateNurikabe,
+  validDosun,
+  validFiveCells,
+  validNurikabe,
+} from "./extra-puzzles.ts";
 /** All generation is deterministic. Bump this version if generation changes after release. */
 export const GENERATOR_VERSION = 1;
 // These persisted identifiers also seed generation; keep them stable when display names change.
@@ -11,7 +19,14 @@ export const KINDS = [
   "snap",
   "mambo",
   "mosaic",
+  "dosun",
+  "nurikabe",
+  "fivecells",
 ] as const;
+export const EXTRA_GAMES_START = "2026-09-09";
+export function kindsForDate(date: string): readonly Kind[] {
+  return date < EXTRA_GAMES_START ? KINDS.slice(0, 9) : KINDS;
+}
 export type Kind = typeof KINDS[number];
 export const META: Record<
   Kind,
@@ -65,7 +80,7 @@ export const META: Record<
     category: "A LITTLE STRATEGY",
     description: "Give every queen her space.",
     rules:
-      "Place one queen in each row, column, and colored region. Queens cannot touch, even diagonally. Tap a cell to cycle empty → queen → cross → empty. Crosses are your own notes. Arrow keys and Space also work.",
+      "Place one queen in each row, column, and colored region. Queens cannot touch, even diagonally. Click or tap once to mark a large X; drag across cells to mark several. Double-click or double-tap a cell to place a queen. Tap any mark to clear it. Dragging preserves queens. Crosses are your own notes. With a keyboard, arrows select and Space cycles empty → queen → X → empty.",
     color: 0x807198,
     pale: 0xede8f2,
   },
@@ -101,9 +116,36 @@ export const META: Record<
     category: "PIECE BY PIECE",
     description: "A small picture in the numbers.",
     rules:
-      "Shade squares so each number equals the shaded squares in its surrounding 3 × 3 neighborhood, including its own square. At edges, count only squares inside the grid. Tap to cycle shaded → marked empty → undecided. Mark every square to finish.",
+      "Shade squares so each number equals the shaded squares in its surrounding 3 × 3 neighborhood, including its own square. At edges, count only squares inside the grid. Tap to cycle shaded → marked empty → undecided. Mark every square to finish. A red clue means too many shaded squares, or too few once every square in its neighborhood is decided.",
     color: 0x6b7d8b,
     pale: 0xe3e9ef,
+  },
+  dosun: {
+    name: "Dosun-Fuwari",
+    category: "RISE & REST",
+    description: "A little lift. A little gravity.",
+    rules:
+      "Put one hollow balloon and one solid weight in every outlined region. A balloon needs the top edge, a rock, or another balloon directly above it. A weight needs the bottom edge, a rock, or another weight directly below. Region borders do not provide support. Tap to cycle balloon → weight → X note → clear. Rocks cannot be changed.",
+    color: 0x86734f,
+    pale: 0xeee8da,
+  },
+  nurikabe: {
+    name: "Nurikabe",
+    category: "ISLANDS & SEA",
+    description: "Find the shape of the shoreline.",
+    rules:
+      "Each number belongs to an island of exactly that many cells, joined along their sides. Each island contains one number; different islands cannot share an edge. Shade every other cell as sea. The sea must connect along its sides, without any solid 2 × 2 sea squares. Tap to cycle sea → island dot → clear. Numbered cells stay land. Decide every square to finish.",
+    color: 0x567b85,
+    pale: 0xdfeaec,
+  },
+  fivecells: {
+    name: "Five Cells",
+    category: "FIVE AT A TIME",
+    description: "Little shapes. A perfect fit.",
+    rules:
+      "Draw borders to divide the grid into connected groups of exactly five cells. A clue counts the bordering sides of its cell, including the outer frame. A group can contain any number of clues. Do not leave extra lines inside a group. Tap an internal grid edge to add or remove a border; drag along edges to draw several. With a keyboard, arrows select a cell and Shift + an arrow toggles that side.",
+    color: 0x816777,
+    pale: 0xeee1e8,
   },
 };
 export class Random {
@@ -604,6 +646,14 @@ export function neighborhood(i: number, n: number) {
   }
   return cells;
 }
+/** Incomplete areas stay neutral unless their shaded count already exceeds the clue. */
+export function mosaicClueConflict(clue: number, values: number[], index: number, size: number) {
+  if (clue < 0) return false;
+  const cells = neighborhood(index, size);
+  const shaded = cells.filter((i) => values[i] === 1).length;
+  const decided = cells.every((i) => values[i] === 1 || values[i] === 2);
+  return shaded > clue || (decided && shaded < clue);
+}
 export function countMosaic(clues: number[], n: number, limit = 2): number {
   const constraints = clues.flatMap((v, i) =>
     v >= 0 ? [{ target: v, cells: neighborhood(i, n) }] : []
@@ -672,7 +722,7 @@ export function generate(kind: Kind, seed: string): Puzzle {
       ? 9
       : kind === "atoms"
       ? 4
-      : kind === "pipes" || kind === "snap"
+      : kind === "pipes" || kind === "snap" || kind === "nurikabe" || kind === "fivecells"
       ? 5
       : 6;
   const p = blank(kind, seed, size);
@@ -701,6 +751,15 @@ export function generate(kind: Kind, seed: string): Puzzle {
       break;
     case "mosaic":
       mosaic(p, rng);
+      break;
+    case "dosun":
+      generateDosun(p, rng);
+      break;
+    case "nurikabe":
+      generateNurikabe(p, rng);
+      break;
+    case "fivecells":
+      generateFiveCells(p, rng);
       break;
   }
   if (cache.size > 100) cache.delete(cache.keys().next().value!);
@@ -800,6 +859,12 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
     case "mosaic":
       return a.every((v) => v === 1 || v === 2) &&
         p.clues.every((v, i) => v < 0 || neighborhood(i, n).filter((j) => a[j] === 1).length === v);
+    case "dosun":
+      return validDosun(p.regions, a, n);
+    case "nurikabe":
+      return validNurikabe(p.clues, a, n);
+    case "fivecells":
+      return validFiveCells(p.clues, p.edges, a, n);
     case "mambo":
       return a.every((v) => v === 1 || v === 2) && validBalance(a, n, p.links);
   }

@@ -2,7 +2,7 @@
   "version": "5",
   "specifiers": {
     "npm:phaser@3.90.0": "3.90.0",
-    "npm:vite@7.3.1": "7.3.1"
+    "npm:vite@7.3.5": "7.3.5"
   },
   "npm": {
     "@esbuild/aix-ppc64@0.27.7": {
@@ -388,8 +388,8 @@
         "picomatch"
       ]
     },
-    "vite@7.3.1": {
-      "integrity": "sha512-w+N7Hifpc3gRjZ63vYBXA56dvvRlNWRczTdmCBBa+CotUzAPf5b7YMdMR/8CQoeYE5LX3W4wj6RYTgonm1b9DA==",
+    "vite@7.3.5": {
+      "integrity": "sha512-KuOaNhcnGFN2zIPGA7wRmzF+lJA1sea7rHq17aiJ++9lzY1WWG6Jpwqwe1KNbRVPIqHmr8GLYx7jbrQcN/7/ww==",
       "dependencies": [
         "esbuild",
         "fdir",
@@ -407,12 +407,12 @@
   "workspace": {
     "dependencies": [
       "npm:phaser@3.90.0",
-      "npm:vite@7.3.1"
+      "npm:vite@7.3.5"
     ],
     "packageJson": {
       "dependencies": [
         "npm:phaser@3.90.0",
-        "npm:vite@7.3.1"
+        "npm:vite@7.3.5"
       ]
     }
   }

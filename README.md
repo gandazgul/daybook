@@ -1,6 +1,6 @@
 # Daybook
 
-Nine daily logic puzzles, a calendar, and a quiet place to play. Built entirely in **Phaser 3**,
+Twelve daily logic puzzles, a calendar, and a quiet place to play. Built entirely in **Phaser 3**,
 with **TypeScript, Vite, and Deno 2**. All boards, illustrations, menus, dialogs, and controls are
 drawn in the engine. No image service, artwork assets, account, score, streak, audio, or external
 font is required.
@@ -71,16 +71,37 @@ Number Path, Pipes, and Atoms accept **any valid solution**, not just the genera
 Regional Queens follows the regional queen-placement rules (not full chess queen diagonals). Balance
 uses the two-symbol rules; it does not add a separate rule forbidding duplicate rows. Mosaic is the
 Fill-a-Pix interpretation. Atoms uses orthogonally adjacent cells, with no line crossing or diagonal
-bonds. All generators and validators live in `src/puzzles.ts`, independent of Phaser.
+bonds. Generators and validators live in `src/puzzles.ts` and `src/extra-puzzles.ts`, independent
+of Phaser.
+
+The additional games follow the rules described by Nikoli, using original generators, wording, and
+Phaser drawings: [Dosun-Fuwari](https://www.nikoli.co.jp/en/puzzles/dosun_fuwari/),
+[Nurikabe](https://www.nikoli.co.jp/en/puzzles/nurikabe/), and
+[Five Cells](https://www.nikoli.co.jp/en/puzzles/five_cells/).
+
+- **Dosun-Fuwari (6 × 6):** one balloon and one weight in each region, supported vertically by the
+  appropriate outer edge, a rock, or the same kind of piece. Region walls do not support pieces.
+- **Nurikabe (5 × 5):** numbered islands of exact sizes, separated by a connected sea with no 2 × 2
+  sea squares. Each island has one clue.
+- **Five Cells (5 × 5):** connected groups of five cells, with clues counting the bordering sides of
+  a cell, including the outer frame. No extra borders inside groups.
+
+All three have deterministic, solver-checked unique solutions. Dosun-Fuwari reshapes connected
+regions while retaining uniqueness; Nurikabe builds a sea and validates island clues; Five Cells
+uses pentomino tilings and removes redundant clues. Completion checks the rules, not equality with
+the generator's stored solution.
 
 ## Daily collection and practice
 
 - Each **local calendar date** deterministically seeds one puzzle of each kind. The same date and
   generator version produce the same puzzles on every device.
-- The featured game rotates through all nine kinds. All nine remain available every day. Puzzles
-  generate on demand, so an unattended server needs no cron job.
-- The calendar allows past dates and prevents future-day play. A day is complete when all nine are
-  finished. Partial completion and started days have markers.
+- Dosun-Fuwari, Nurikabe, and Five Cells join daily collections from **September 9, 2026**. Earlier
+  dates retain nine games and their existing completion status. All twelve are available in
+  practice. Existing generators and saved puzzle identifiers are unchanged.
+- The featured game rotates through the kinds available on that date. Puzzles generate on demand,
+  so an unattended server needs no cron job.
+- The calendar allows past dates and prevents future-day play. A day is complete when all games
+  available on that date are finished. Partial completion and started days have markers.
 - Practice uses a fresh random seed on every opening and never changes the daily calendar. Practice
   state exists only for the current browser session.
 - Entries, pencil notes, completion timestamps, and accumulated solving seconds are saved in
@@ -102,9 +123,11 @@ on desktop or below it on smaller screens.
 
 Night mode is selected on first use between 7 pm and 7 am, using the device's clock. The header
 theme button switches between warm paper and dim night colors; your choice is remembered. The timer
-is hidden by default but still records time. Puzzle settings let you show it and reset the current
+is visible by default. Hide it by tapping it or using puzzle settings; when hidden, no placeholder
+is shown and solving time is still recorded. Settings let you show it again and reset the current
 board. No flashing effects, celebration animations, sounds, leaderboards, streaks, or urgency cues
-are used.
+are used. Touches receive a brief, muted ring that gently expands and fades. With the system’s
+reduced-motion setting, this becomes a stationary highlight.
 
 - **Sudoku / Killer:** tap a cell, then use the keypad or 1–9. `N` toggles notes; Backspace/Delete
   clears. Fixed clues cannot be edited. Conflicting digits are highlighted without revealing the
@@ -112,11 +135,22 @@ are used.
 - **Pipes:** tap to rotate clockwise.
 - **Atoms:** tap midway between two atoms to cycle no bond → one line → two lines. With a keyboard,
   select an atom with arrows, then Shift + an arrow cycles its bond.
-- **Regional Queens / Balance / Mosaic:** tap to cycle the cell's three states. In Regional Queens,
-  crosses are optional notes. In Mosaic, mark all unshaded squares as empty.
+- **Regional Queens:** click or tap to mark a large X, or drag across cells to paint Xs.
+  Double-click or double-tap to place a queen. Tap a mark to clear it. Dragging preserves queens and
+  is undone as one action. With a keyboard, arrows select and Space cycles the marks.
+- **Balance / Mosaic:** tap to cycle the cell's three states. In Mosaic, mark all unshaded squares
+  as empty. Mosaic clues turn red for excess shading, or for too little shading once their whole
+  neighborhood is decided. Untouched areas stay neutral; edges count only on-board cells.
 - **Shikaku:** drag between opposite corners, or tap two corners. Tap a placed rectangle to remove
   it. Invalid rectangles are rejected with a short message.
 - **Number Path:** drag or tap adjacent cells. Tap an earlier path cell to backtrack.
+- **Dosun-Fuwari:** tap to cycle balloon → weight → X note → clear. Rocks are fixed; X notes are
+  optional. Arrows and Space work too.
+- **Nurikabe:** tap to cycle sea → island dot → clear. Numbered cells are fixed land. Mark all other
+  cells to finish; arrows and Space also work.
+- **Five Cells:** tap an internal grid edge to add/remove a border. Drag along grid lines to draw or
+  erase several borders as one undoable action. The outer frame is fixed. With a keyboard, arrows
+  select a cell and Shift + an arrow toggles its shared border. Groups of five gain a tint.
 - **All puzzles:** `U` or Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Escape pauses. Arrows select
   cells and Space activates them. Tab cycles menu controls; Enter activates the focused control.
   Wheel or touch-drag scrolls the collection.
@@ -129,14 +163,15 @@ grid interface.
 
 - `src/main.ts`: Phaser scenes, responsive engine UI, input, themes, and timers.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
+- `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
+- `src/input.ts`: queen tap/double-tap and drag gesture state.
 - `src/storage.ts`: dates, feature rotation, durations, and local persistence.
 - `tests/puzzles_test.ts`: puzzle and persistence regression coverage.
 - `server.ts`: production static server, cache headers, and health endpoint.
 - `Dockerfile` / `compose.yaml`: standalone container hosting.
 
-Potential next additions: Nonograms (picture logic), Slitherlink (one continuous loop), and Nurikabe
-(islands and connected water). They fit the same daily format; they are suggestions, not part of the
-current nine-game collection.
+Potential next additions: Nonograms (picture logic) and Slitherlink (one continuous loop). They fit
+the same daily format; they are suggestions, not part of the current collection.
 
 Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutorial/) and
 [Phaser scaling](https://docs.phaser.io/phaser/concepts/scale-manager).
@@ -148,6 +183,17 @@ build. A separate full-year sweep generated and validated **3,285 puzzles (all n
 day of 2027)**. Browser checks cover phone and desktop rendering, Regional Queens completion, saved
 completion after reload, Sudoku notes and keyboard entry, Atoms single/double bonds and undo, Mosaic
 shading, Number Path dragging, and Shikaku rectangles.
+
+Gesture regression coverage includes single/double taps, fast drags, preserving queens, revisiting
+cells, cancellation, and grouped undo. Browser checks also cover touch feedback across all nine
+games, reduced motion, multiple fingers, and completing Queens by double-tap.
+
+The twelve-game collection passes type checking, lint, **21 regression tests**, and a production
+build. A further full-year sweep generated **1,095 new puzzles** (365 per added game), checking
+every solution's validity and uniqueness. The original nine puzzle payloads remain unchanged.
+Browser checks cover the three added games on phone and desktop in light and night modes, touch
+playthroughs, Five Cells border drawing/erasing and grouped undo/redo, keyboard borders, saved daily
+completion, next-puzzle controls, and the calendar's nine-to-twelve-game transition.
 
 The production Deno server was checked directly. The Dockerfile also builds successfully with Podman
 for `linux/amd64` on an Apple Silicon host. Container verification covers non-root operation, a

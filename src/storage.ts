@@ -1,4 +1,11 @@
-import { adjacent, GENERATOR_VERSION, isSolved, type Kind, KINDS, type Puzzle } from "./puzzles.ts";
+import {
+  adjacent,
+  GENERATOR_VERSION,
+  isSolved,
+  type Kind,
+  kindsForDate,
+  type Puzzle,
+} from "./puzzles.ts";
 export interface Progress {
   values: number[];
   notes: Record<number, number[]>;
@@ -25,7 +32,8 @@ export function dayIndex(key: string) {
   return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 export function featured(key: string): Kind {
-  return KINDS[((dayIndex(key) % KINDS.length) + KINDS.length) % KINDS.length];
+  const kinds = kindsForDate(key);
+  return kinds[((dayIndex(key) % kinds.length) + kinds.length) % kinds.length];
 }
 export function formatTime(seconds: number) {
   const s = Math.floor(seconds);
@@ -85,6 +93,12 @@ export class ProgressStore {
       case "queens":
       case "mosaic":
         return a.every((v) => v >= 0 && v <= 2);
+      case "dosun":
+        return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 3);
+      case "nurikabe":
+        return a.every((v, i) => v >= 0 && v <= 2 && (!p.clues[i] || v === 2));
+      case "fivecells":
+        return a.every((v) => v === 0 || v === 1);
       case "shikaku":
         return a.every((v) => v >= 0);
       case "snap":
@@ -111,10 +125,10 @@ export class ProgressStore {
     }
   }
   count(date: string) {
-    return KINDS.filter((kind) => this.get(date, kind)?.completed).length;
+    return kindsForDate(date).filter((kind) => this.get(date, kind)?.completed).length;
   }
   started(date: string) {
-    return KINDS.some((kind) => {
+    return kindsForDate(date).some((kind) => {
       const p = this.get(date, kind);
       return p && (p.elapsed > 0 || p.completed);
     });
