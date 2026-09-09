@@ -3,6 +3,7 @@ import "./style.css";
 import { fiveRegions } from "./extra-puzzles.ts";
 import { gridLine, pruneSudokuNotes, QueensInput } from "./input.ts";
 import { installDaybook, pwa, startPwa } from "./pwa.ts";
+import { tutorialSteps, TutorialStore } from "./tutorials.ts";
 import {
   adjacent,
   generate,
@@ -27,7 +28,7 @@ import {
 } from "./storage.ts";
 
 type Page = "today" | "calendar" | "practice" | "game";
-type Modal = "help" | "pause" | "reset" | "settings" | "install" | null;
+type Modal = "help" | "pause" | "reset" | "settings" | "install" | "tutorial" | null;
 const LIGHT = {
   bg: 0xf6f5ef,
   panel: 0xfdfcf8,
@@ -67,6 +68,7 @@ try {
   } as unknown as Storage;
 }
 const store = new ProgressStore(browserStorage);
+const tutorials = new TutorialStore(browserStorage);
 let savedSettings: { night?: boolean; timer?: boolean } = {};
 try {
   savedSettings = JSON.parse(browserStorage.getItem("daybook:settings") || "{}");
@@ -80,6 +82,7 @@ class Daybook extends Phaser.Scene {
   showTimer = savedSettings?.timer ?? true;
   modal: Modal = null;
   helpPage = 0;
+  tutorialPage = 0;
   puzzle?: Puzzle;
   progress?: Progress;
   selected = -1;
@@ -144,8 +147,18 @@ class Daybook extends Phaser.Scene {
       this.scrollY = 0;
       this.draw();
     });
+    // Respond to the safe-area container itself, including rotation while the game is paused.
+    const resize = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0 && (this.W !== width || this.H !== height)) {
+        this.scale.getParentBounds();
+        this.scale.refresh();
+      }
+    });
+    resize.observe(document.getElementById("game")!);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => resize.disconnect());
     this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _x: number, dy: number) => {
-      if (!this.modal && this.contentHeight > this.H) {
+      if ((!this.modal || this.modal === "tutorial") && this.contentHeight > this.H) {
         this.scrollY = Phaser.Math.Clamp(this.scrollY + dy, 0, this.contentHeight - this.H + 20);
         this.draw();
       }
@@ -183,7 +196,7 @@ class Daybook extends Phaser.Scene {
       this.touchFeedback(p.x, p.y, Math.min(24, this.board.cell * .32));
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (!p.isDown || this.modal || (this.boardPointerId >= 0 && p.id !== this.boardPointerId)) {
+      if (!p.isDown || (this.modal && this.modal !== "tutorial") || (this.boardPointerId >= 0 && p.id !== this.boardPointerId)) {
         return;
       }
       if (this.page !== "game" || this.pointerStart < 0) {
@@ -552,13 +565,14 @@ class Daybook extends Phaser.Scene {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", css(this.C.bg));
     document.documentElement.style.backgroundColor = css(this.C.bg);
     this.contentHeight = this.H;
-    if (this.page === "game") this.drawGame();
+    if (this.modal === "tutorial") this.drawTutorial();
+    else if (this.page === "game") this.drawGame();
     else {
       this.header();
       if (this.page === "calendar") this.drawCalendarPage();
       else this.drawCollection();
     }
-    if (this.modal) this.drawModal();
+    if (this.modal && this.modal !== "tutorial") this.drawModal();
     this.drawFocus();
     this.drawTouchFeedback();
   }
@@ -606,7 +620,7 @@ class Daybook extends Phaser.Scene {
       practice
         ? "Freshly generated puzzles, whenever you feel like it."
         : `${kinds.length} little challenges. Take your time.`,
-      this.mobile ? 14 : 16,
+      this.mobile ? 16 : 18,
       c.muted,
       undefined,
       this.mobile || practice ? w : w - 335,
@@ -629,7 +643,7 @@ class Daybook extends Phaser.Scene {
         m + kinds.length * (this.mobile ? 12 : 20) + 14,
         py - 2,
         `${completed} of ${kinds.length} completed`,
-        12,
+        14,
         c.muted,
       );
       if (!this.mobile) this.miniCalendar(m + w - 274, top - 8, 274);
@@ -654,7 +668,7 @@ class Daybook extends Phaser.Scene {
     const cols = this.W < 550 ? 2 : 3,
       gap = this.mobile ? 12 : 18,
       cw = (w - gap * (cols - 1)) / cols,
-      ch = this.mobile ? 194 : 214;
+      ch = this.mobile ? 240 : 234;
     kinds.forEach((kind, i) => {
       const x = m + (i % cols) * (cw + gap),
         y = gridY + Math.floor(i / cols) * (ch + gap),
@@ -684,9 +698,9 @@ class Daybook extends Phaser.Scene {
         cw - 32,
       );
       if (!this.mobile) {
-        this.text(x + 16, y + 140, meta.description, 12, c.muted, undefined, cw - 32);
+        this.text(x + 16, y + 140, meta.description, 14, c.muted, undefined, cw - 32);
       }
-      const by = y + ch - 30;
+      const by = y + ch - (this.mobile ? 72 : 50);
       this.text(
         x + 16,
         by,
@@ -697,8 +711,10 @@ class Daybook extends Phaser.Scene {
           : practice
           ? "Generate & play"
           : "Ready when you are",
-        11,
+        14,
         done ? c.accent : c.muted,
+        undefined,
+        cw - 52,
       );
       this.text(x + cw - 23, by - 2, done ? "✓" : "↗", 16, this.tint(kind)).setOrigin(.5, 0);
       this.hit(
@@ -1078,8 +1094,160 @@ class Daybook extends Phaser.Scene {
     this.redoHistory = [];
     this.notes = false;
     this.scrollY = 0;
+    if (!tutorials.hasSeen(kind)) {
+      this.startTutorial();
+      return;
+    }
     this.draw();
     this.announce(`${META[kind].name}. ${META[kind].rules.join(" ")}`);
+  }
+  startTutorial() {
+    if (!this.puzzle || !this.progress) return;
+    this.persist();
+    this.modal = "tutorial";
+    this.tutorialPage = 0;
+    this.scrollY = 0;
+    this.focused = -1;
+    this.pointerStart = this.boardPointerId = -1;
+    this.queensInput.reset();
+    this.sudokuTap = undefined;
+    this.touchPulses = [];
+    this.draw();
+    this.announceTutorial();
+  }
+  announceTutorial() {
+    const steps = tutorialSteps(this.puzzle!), step = steps[this.tutorialPage];
+    this.announce(`${META[this.puzzle!.kind].name} tutorial. Step ${this.tutorialPage + 1} of ${steps.length}. ${step.title}. ${step.text}`);
+  }
+  advanceTutorial(delta: number) {
+    const count = tutorialSteps(this.puzzle!).length;
+    if (this.tutorialPage + delta >= count) {
+      this.finishTutorial();
+      return;
+    }
+    this.tutorialPage = Math.max(0, this.tutorialPage + delta);
+    this.scrollY = 0;
+    this.focused = -1;
+    this.draw();
+    this.announceTutorial();
+  }
+  finishTutorial() {
+    tutorials.markSeen(this.puzzle!.kind);
+    this.modal = null;
+    this.focused = -1;
+    this.scrollY = 0;
+    this.draw();
+    this.announce("Tutorial closed. You can replay it with the Tutorial button.");
+  }
+  drawTutorial() {
+    const p = this.puzzle!, c = this.C, steps = tutorialSteps(p), step = steps[this.tutorialPage];
+    const n = step.example?.rows.length ?? p.size;
+    const legendHeight = steps.some((item) => item.example) ? 30 : 0;
+    const margin = 16, top = 80, gap = 24;
+    const wide = this.W >= 760 || this.W > this.H;
+    const width = Math.min(1080, this.W - margin * 2), left = (this.W - width) / 2;
+    const boardSpace = wide ? (width - gap) * .43 : width;
+    const cardWidth = wide ? width - boardSpace - gap : Math.min(width, 480);
+    const pad = 16, textWidth = cardWidth - pad * 2;
+    const short = wide && this.H < 400;
+    const title = this.text(0, 0, step.title, short ? 21 : 23, c.ink, "Georgia", textWidth);
+    const body = this.text(0, 0, step.text, short ? 14 : 16, c.ink, undefined, textWidth);
+    if (short) body.setLineSpacing(4);
+    // Keep the board and navigation still between steps, even when a rule takes more lines.
+    const height = Math.max(...steps.map((item) => {
+      title.setText(item.title);
+      body.setText(item.text);
+      return pad * 2 + title.height + 12 + body.height + 20 + 42;
+    }));
+    title.setText(step.title);
+    body.setText(step.text);
+    const size = Math.max(120, Math.min(480, boardSpace, wide ? this.H - top - margin - legendHeight : this.H - top - height - gap - margin - legendHeight));
+    const bx = wide ? left + (boardSpace - size) / 2 : (this.W - size) / 2;
+    const by = top;
+    const cardX = wide ? left + boardSpace + gap : (this.W - cardWidth) / 2;
+    const cardY = wide ? top : by + size + gap + legendHeight;
+    this.text(left, 19, META[p.kind].name, 20, c.ink, "Georgia", width - 88);
+    this.text(left, 51, `${step.example ? "RULE EXAMPLE" : "TUTORIAL"} · ${this.tutorialPage + 1} OF ${steps.length}`, 12, c.accent).setLetterSpacing(1);
+    this.button(left + width - 72, 18, 72, 40, "Skip", () => this.finishTutorial()).setFontSize(16);
+
+    this.board = { x: bx, y: by, cell: size / n, n };
+    // Reuse the player's board without editing progress or showing old selection highlights.
+    const selected = this.selected, selectedCells = this.selectedCells;
+    this.selected = -1;
+    this.selectedCells = new Set();
+    try {
+      if (step.example) this.drawNurikabeExample(step.example.rows);
+      else this.drawBoard();
+    } finally {
+      this.selected = selected;
+      this.selectedCells = selectedCells;
+    }
+    const focus = new Set(step.cells), s = this.board.cell;
+    const overlay = this.add.graphics().setName("tutorial-highlight");
+    const highlight = step.example?.invalid ? c.error : c.accent;
+    for (let i = 0; i < n ** 2; i++) {
+      const x = bx + i % n * s, y = by + Math.floor(i / n) * s;
+      if (!focus.has(i)) overlay.fillStyle(c.bg, .68).fillRect(x, y, s, s);
+    }
+    // Outline the highlighted area's perimeter; keep its symbols and clue numbers unobscured.
+    overlay.lineStyle(2.5, highlight);
+    for (const i of focus) {
+      const x = bx + i % n * s, y = by + Math.floor(i / n) * s;
+      if (!focus.has(i - n)) overlay.lineBetween(x, y, x + s, y);
+      if (!focus.has(i + n)) overlay.lineBetween(x, y + s, x + s, y + s);
+      if (i % n === 0 || !focus.has(i - 1)) overlay.lineBetween(x, y, x, y + s);
+      if (i % n === n - 1 || !focus.has(i + 1)) overlay.lineBetween(x + s, y, x + s, y + s);
+    }
+    for (const [x1, y1, x2, y2] of step.lines || []) {
+      overlay.lineStyle(4, c.accent, .8).lineBetween(bx + x1 * s, by + y1 * s, bx + x2 * s, by + y2 * s);
+    }
+    if (step.anchor !== undefined) {
+      overlay.lineStyle(2, c.accent).strokeCircle(
+        bx + (step.anchor % n + .5) * s,
+        by + (Math.floor(step.anchor / n) + .5) * s,
+        s * .32,
+      );
+    }
+    for (const [x, y, radius] of step.rings || []) {
+      overlay.lineStyle(2, c.accent).strokeCircle(bx + x * s, by + y * s, radius * s);
+    }
+    if (legendHeight) {
+      const legendWidth = wide ? boardSpace : width, legendX = wide ? left : (this.W - legendWidth) / 2;
+      ["Land", "Water", "Blank"].forEach((label, index) => {
+        const x = legendX + (index + .5) * legendWidth / 3 - 28, y = by + size + 14;
+        this.box(x, y, 12, 12, index === 1 ? this.tint("nurikabe") : c.panel, c.line, 1);
+        if (index === 0) this.circle(x + 6, y + 6, 2, c.accent);
+        this.text(x + 17, y - 2, label, 12, c.muted);
+      });
+    }
+    this.box(cardX, cardY, cardWidth, height, c.panel, c.line, 12);
+    title.setPosition(cardX + pad, cardY + pad);
+    body.setPosition(cardX + pad, cardY + pad + title.height + 12);
+    this.children.bringToTop(title);
+    this.children.bringToTop(body);
+    const buttonY = cardY + height - pad - 42, buttonWidth = (textWidth - 10) / 2;
+    this.button(cardX + pad, buttonY, buttonWidth, 42, "Previous", () => this.advanceTutorial(-1), false, this.tutorialPage === 0).setFontSize(16);
+    this.button(cardX + pad + buttonWidth + 10, buttonY, buttonWidth, 42,
+      this.tutorialPage === steps.length - 1 ? "Finish" : "Next", () => this.advanceTutorial(1), true).setFontSize(16);
+    this.contentHeight = Math.max(this.H, by + size + legendHeight + margin, cardY + height + margin);
+    if (this.scrollY) {
+      this.children.getAll().forEach((object) => {
+        (object as Phaser.GameObjects.Graphics).y -= this.scrollY;
+      });
+      this.controls.forEach((control) => control.y -= this.scrollY);
+      this.board.y -= this.scrollY;
+    }
+  }
+  drawNurikabeExample(rows: string[]) {
+    const { x, y, cell: s, n } = this.board, c = this.C;
+    this.box(x - 7, y - 7, n * s + 14, n * s + 14, c.panel, c.line, 9);
+    rows.forEach((row, r) => [...row].forEach((value, col) => {
+      const xx = x + col * s, yy = y + r * s;
+      this.box(xx, yy, s, s, c.panel, c.line, 0);
+      if (value === "#") this.box(xx + 2, yy + 2, s - 4, s - 4, this.tint("nurikabe"), undefined, 2);
+      else if (value === "o") this.circle(xx + s / 2, yy + s / 2, s * .065, c.accent);
+      else if (value !== "?") this.text(xx + s / 2, yy + s / 2, value, s * .4, c.ink).setOrigin(.5);
+    }));
   }
   drawGame() {
     if (!this.puzzle || !this.progress) return;
@@ -1136,7 +1304,8 @@ class Daybook extends Phaser.Scene {
       const sy = compact ? bottom + 22 : by;
       const sw = compact ? size : w - (sx - m);
       const height = this.drawCompletion(sx, sy, sw);
-      this.contentHeight = Math.max(this.H, bottom + 30, sy + height + 30);
+      this.button(sx, sy + height + 12, sw, 40, "Tutorial", () => this.startTutorial());
+      this.contentHeight = Math.max(this.H, bottom + 30, sy + height + 76);
     } else if (compact) {
       if (this.showTimer) {
         this.clockText = this.text(
@@ -1193,7 +1362,7 @@ class Daybook extends Phaser.Scene {
         this.draw();
       });
       this.contentHeight = Math.max(this.H, ty + 100);
-      this.text(
+      const help = this.text(
         bx,
         ty + 53,
         this.progress.completed
@@ -1204,6 +1373,9 @@ class Daybook extends Phaser.Scene {
         undefined,
         size,
       );
+      const tutorialY = ty + 53 + help.height + 14;
+      this.button(bx, tutorialY, size, 40, "Tutorial", () => this.startTutorial());
+      this.contentHeight = Math.max(this.contentHeight, tutorialY + 64);
     } else {
       const sx = m + Math.min(w, 690) + 32, sw = w - (sx - m);
       if (this.showTimer) {
@@ -1225,8 +1397,9 @@ class Daybook extends Phaser.Scene {
       }
       const helpY = this.showTimer ? by + 108 : by - 5;
       this.text(sx, helpY, "HOW TO PLAY", 10, c.accent).setLetterSpacing(1.5);
-      const rulesHeight = this.drawRules(sx, helpY + 26, sw, META[p.kind].rules);
-      const controlsY = Math.max(helpY + 193, helpY + 26 + rulesHeight + 24);
+      this.button(sx, helpY + 24, sw, 40, "Tutorial", () => this.startTutorial());
+      const rulesHeight = this.drawRules(sx, helpY + 82, sw, META[p.kind].rules);
+      const controlsY = Math.max(helpY + 249, helpY + 82 + rulesHeight + 24);
       if (p.kind === "sudoku" || p.kind === "killer") {
         this.keypad(bx, bottom + 20, size, 42);
       }
@@ -2042,12 +2215,20 @@ class Daybook extends Phaser.Scene {
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      if (this.modal) {
+      if (this.modal === "tutorial") this.finishTutorial();
+      else if (this.modal) {
         this.modal = null;
         this.draw();
       } else if (this.page === "game" && !this.progress?.completed) {
         this.modal = "pause";
         this.draw();
+      }
+      return;
+    }
+    if (this.modal === "tutorial") {
+      if (["ArrowRight", "ArrowLeft", "Enter", " "].includes(e.key)) {
+        e.preventDefault();
+        this.advanceTutorial(e.key === "ArrowLeft" ? -1 : 1);
       }
       return;
     }

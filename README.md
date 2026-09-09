@@ -145,6 +145,21 @@ your puzzle history. If storage is blocked, the collection shows that progress i
 Completed puzzles remain visible, with the success message and next-puzzle button beside the board
 on desktop or below it on smaller screens.
 
+## Guided rules tutorials
+
+Each game's first visit on a device opens a short, step-by-step tutorial. Daily and practice share
+the same per-game flag in local storage (`daybook:tutorials:v1:<kind>`). Finishing or skipping marks
+that tutorial as seen; leaving before either lets it appear again next time. The **Tutorial**
+button on every puzzle page replays it, including completed puzzles.
+
+Each step explains a rule or control and highlights its relevant cells, clues, regions or edges.
+Nurikabe uses labeled teaching boards to show completed islands and water, allowed corner touches,
+and forbidden patterns, then returns to the current puzzle. Other tutorials highlight the current
+board throughout. Tutorials never read the solution, suggest a move, or edit progress. Solving time
+pauses throughout. Use Previous/Next, the arrow keys, or Enter to advance; Skip or Escape returns to
+the puzzle. The board stays visible beside or above the instructions, in either theme. If local
+storage is unavailable, the seen flag lasts for the current session only.
+
 ## Night play and controls
 
 Night mode is selected on first use between 7 pm and 7 am, using the device's clock. The header
@@ -200,6 +215,7 @@ grid interface.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
 - `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
 - `src/input.ts`: queen tap/double-tap and drag gesture state.
+- `src/tutorials.ts`: rules walkthroughs, visible-board highlights, and device first-visit flags.
 - `src/pwa.ts`: installation prompts, service worker registration, and offline status.
 - `src/service-worker.js`: offline cache lifecycle; Vite injects the build hash and asset list.
 - `public/manifest.webmanifest` / `public/icons/`: phone installation metadata and icons.
@@ -215,6 +231,10 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 [Phaser scaling](https://docs.phaser.io/phaser/concepts/scale-manager).
 
 ## Verification
+
+Tutorial tests cover all twelve games, daily/practice seeds, in-bounds highlights, no solution
+access, and per-game seen flags with persistent, damaged and unavailable storage. Browser checks
+cover first visits, replay, navigation, paused time, protected progress and responsive layouts.
 
 PWA checks cover Chrome installability, all twelve puzzles offline, saved notes and completion after
 offline reload and a full browser restart, waiting updates, old assets remaining available during
