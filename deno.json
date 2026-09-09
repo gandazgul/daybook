@@ -1,0 +1,17 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "phaser": "npm:phaser@3.90.0",
+    "vite": "npm:vite@7.3.1"
+  },
+  "tasks": {
+    "dev": "deno run -A npm:vite@7.3.1 --host 0.0.0.0",
+    "build": "deno check src/main.ts && deno run -A npm:vite@7.3.1 build",
+    "preview": "deno run -A npm:vite@7.3.1 preview --host 0.0.0.0",
+    "start": "deno run --allow-net --allow-read=dist --allow-env=PORT server.ts",
+    "test": "deno test tests/",
+    "check": "deno check src/main.ts server.ts && deno lint src tests server.ts"
+  },
+  "compilerOptions": { "lib": ["dom", "dom.iterable", "deno.ns", "esnext"], "strict": true },
+  "fmt": { "lineWidth": 100, "exclude": ["dist", "node_modules"] }
+}

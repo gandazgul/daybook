@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light;
+  background: #f6f5ef;
+  font-family: Arial, sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+#game {
+  width: 100%;
+  height: 100%;
+}
+canvas {
+  display: block;
+  touch-action: none;
+}
+canvas:focus-visible {
+  outline: 2px solid #52654c;
+  outline-offset: -3px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
