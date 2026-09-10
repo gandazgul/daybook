@@ -1,3 +1,4 @@
+import finishedBoards from "./tutorial-boards.json" with { type: "json" };
 import type { Kind, Puzzle } from "./puzzles.ts";
 import type { StorageLike } from "./storage.ts";
 
@@ -27,6 +28,8 @@ export interface TutorialStep {
   title: string;
   text: string;
   example?: { rows: string[]; invalid?: boolean };
+  finished?: boolean;
+  boardExample?: VisiblePuzzle & { values: number[] };
   cells: number[];
   anchor?: number;
   rings?: [number, number, number][];
@@ -39,7 +42,51 @@ type VisiblePuzzle = Pick<
   "kind" | "size" | "initial" | "clues" | "regions" | "cages" | "links" | "edges"
 >;
 
+const finishedGoals: Record<Exclude<Kind, "nurikabe">, string> = {
+  sudoku:
+    "Every square is filled. Each row, column and outlined 3 × 3 box contains 1–9 exactly once.",
+  killer:
+    "Every row, column and 3 × 3 box contains 1–9. Each dashed cage adds up to its clue, without repeated digits.",
+  pipes:
+    "All pipes carry water from the source. Every opening connects to another pipe, with no leaks or openings off the board.",
+  atoms:
+    "Every atom has as many bonds as its number. A double line counts as two bonds. All atoms belong to one connected network.",
+  queens:
+    "There is one queen in every row, column and colored region. No queens touch, even at corners. The other squares can stay blank.",
+  shikaku:
+    "The whole board is divided into rectangles. Each rectangle has exactly one number, equal to the number of squares inside it.",
+  snap:
+    "One continuous path visits every square exactly once, passing through the numbered dots in order from 1 to the last number.",
+  mambo:
+    "Every row and column has three circles and three diamonds, with no three identical symbols in a row. Every = or × clue is satisfied.",
+  mosaic:
+    "Each clue matches the shaded squares in its 3 × 3 area, including itself. Clue squares are fixed; other unshaded squares may stay blank.",
+  dosun:
+    "Each colored region has one white balloon and one black weight. Balloons are supported above; weights below. Unused squares can stay blank.",
+  fivecells:
+    "Every outlined group contains exactly five squares. A clue counts the sides of its square that lie on a group boundary, including the board edge.",
+};
+
 export function tutorialSteps(p: VisiblePuzzle): TutorialStep[] {
+  const steps = ruleSteps(p);
+  if (p.kind === "nurikabe") {
+    steps[0].finished = true;
+    steps[0].title = "A finished puzzle";
+    return steps;
+  }
+  // These fixed examples are unrelated to the current puzzle and never reveal its answer.
+  const boardExample = finishedBoards[p.kind] as VisiblePuzzle & { values: number[] };
+  return [{
+    title: "A finished puzzle",
+    text: finishedGoals[p.kind] +
+      " This is a separate example. Next explains the rules on your board.",
+    finished: true,
+    boardExample,
+    cells: Array.from({ length: boardExample.size ** 2 }, (_, i) => i),
+  }, ...steps];
+}
+
+function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
   const n = p.size, all = Array.from({ length: n * n }, (_, i) => i);
   const row = (r: number) => all.filter((i) => Math.floor(i / n) === r);
   const col = (c: number) => all.filter((i) => i % n === c);
@@ -332,7 +379,7 @@ export function tutorialSteps(p: VisiblePuzzle): TutorialStep[] {
         },
         step(
           "Include the clue’s square",
-          "The square containing the number is part of the count. It can be shaded or marked empty too.",
+          "The numbered square is part of the count. Its shading is already given and locked: include it if shaded; do not count it if unshaded.",
           [middle],
         ),
         {
@@ -344,13 +391,13 @@ export function tutorialSteps(p: VisiblePuzzle): TutorialStep[] {
           anchor: edge,
         },
         step(
-          "Three cell states",
-          "Tap a square to cycle shaded → marked empty → undecided. An empty mark means you have decided to leave it unshaded.",
-          [middle],
+          "Fill the unnumbered squares",
+          "Tap a square without a number to cycle shaded → marked empty → undecided. Numbered squares are fixed. Empty marks are optional.",
+          [first((i) => p.clues[i] < 0)],
         ),
         step(
-          "Decide every square",
-          "Finish with every square shaded or marked empty, and every clue’s count satisfied.",
+          "Empty marks are optional",
+          "Finish when every clue matches the shaded squares. You can leave other squares blank. Empty marks are only an aid for keeping track.",
         ),
         {
           ...step(

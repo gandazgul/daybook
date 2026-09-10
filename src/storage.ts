@@ -74,6 +74,12 @@ export class ProgressStore {
         ? saved.values.length <= puzzle.size ** 2
         : saved.values.length === puzzle.initial.length);
     if (good) {
+      // Upgrade older Mosaic saves without losing editable squares, notes, or elapsed time.
+      if (puzzle.kind === "mosaic") {
+        puzzle.initial.forEach((value, i) => {
+          if (value) saved.values[i] = value;
+        });
+      }
       saved.completed = isSolved(puzzle, saved.values);
       return saved;
     }

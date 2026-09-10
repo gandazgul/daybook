@@ -305,10 +305,13 @@ export function generateNurikabe(p: Puzzle, rng: Random) {
 function boundaryCount(cells: number[], i: number, n: number) {
   return 4 - neighbors(i, n).filter((j) => cells.includes(j)).length;
 }
-function pentominoCover(clues: number[], n: number, limit: number, rng?: Random) {
-  const all = shapes(n, 5).filter((s) =>
+export function fiveCellOptions(clues: number[], n: number) {
+  return shapes(n, 5).filter((s) =>
     s.cells.every((i) => clues[i] < 0 || boundaryCount(s.cells, i, n) === clues[i])
   );
+}
+function pentominoCover(clues: number[], n: number, limit: number, rng?: Random) {
+  const all = fiveCellOptions(clues, n);
   const options = Array.from({ length: n * n }, (_, i) => all.filter((s) => s.cells.includes(i)));
   const full = (1n << BigInt(n * n)) - 1n;
   let count = 0, solution: number[][] = [], nodes = 0;

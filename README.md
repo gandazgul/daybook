@@ -13,7 +13,9 @@ illustrations, menus, and controls are drawn in the game engine.
 - **Install and play offline:** a phone-friendly PWA with on-device puzzle generation and locally
   saved daily progress.
 - **Learn the rules:** first-visit tutorials for all twelve games, replayable from each puzzle page.
-  Highlights explain the rules; Nurikabe includes illustrated examples.
+  Every tutorial starts with a finished example; highlights explain each rule.
+- **Two kinds of hints:** preview one revealed move or an explained logical deduction in any daily
+  or practice puzzle. Hints run locally and work offline.
 - **Comfortable night play:** warm paper and dim night themes, larger readable labels, gentle touch
   feedback, and an optional timer. Completed puzzles remain visible beside or above the next-puzzle
   controls.
@@ -43,8 +45,9 @@ Atoms, and Number Path are generated from valid constructions and accept any val
 
 Regional Queens uses the regional placement rules, so queens do not attack along an entire chess
 diagonal. Balance does not require different rows to have unique patterns. Atoms connects only
-orthogonally adjacent grid cells. Mosaic uses the Fill-a-Pix rules, with every unshaded square
-explicitly marked empty. Unused Dosun-Fuwari squares can stay blank.
+orthogonally adjacent grid cells. Mosaic is a gentler Fill-a-Pix variant: numbered squares start
+with their correct shading locked; empty marks on other squares are optional aids and unshaded
+squares can stay blank. Unused Dosun-Fuwari squares can stay blank.
 
 The additional rules references are Nikoli's
 [Dosun-Fuwari](https://www.nikoli.co.jp/en/puzzles/dosun_fuwari/),
@@ -87,13 +90,38 @@ the same per-game flag in local storage (`daybook:tutorials:v1:<kind>`). Finishi
 that tutorial as seen; leaving before either lets it appear again next time. The **Tutorial** button
 on every puzzle page replays it, including completed puzzles.
 
-Each step explains a rule or control and highlights its relevant cells, clues, regions or edges.
-Nurikabe uses labeled teaching boards to show completed islands and water, allowed corner touches,
-and forbidden patterns, then returns to the current puzzle. Other tutorials highlight the current
-board throughout. Tutorials never read the solution, suggest a move, or edit progress. Solving time
-pauses throughout. Use Previous/Next, the arrow keys, or Enter to advance; Skip or Escape returns to
-the puzzle. The board stays visible beside or above the instructions, in either theme. If local
-storage is unavailable, the seen flag lasts for the current session only.
+Every tutorial starts with a labeled finished example on a separate board, so players can see the
+goal before learning the rules. Each following step explains a rule or control and highlights its
+relevant cells, clues, regions or edges. Nurikabe also uses teaching boards to show allowed corner
+touches and forbidden patterns, then returns to the current puzzle. Other games return to the
+current board after the finished example. Tutorials never read the current puzzle’s solution,
+suggest a move, or edit progress. Solving time pauses throughout. Use Previous/Next, the arrow keys,
+or Enter to advance; Skip or Escape returns to the puzzle. The board stays visible beside or above
+the instructions, in either theme. If local storage is unavailable, the seen flag lasts for the
+current session only.
+
+## Hints
+
+The **Hint** button on every unfinished daily and practice puzzle offers two choices:
+
+- **Smart hint:** applies logical rules to the visible clues and current entries, explains one
+  forced placement or elimination, and highlights the relevant squares. It never reads the hidden
+  answer. Existing entries and optional marks are treated as assumptions; detected contradictions
+  are explained. When the implemented rules cannot prove a deduction, it says so.
+- **Reveal move:** shows one cell, bond, boundary, rectangle, or path step from a generated
+  solution. This is explicitly an answer reveal. Games with multiple solutions may have other valid
+  moves. Any required path backtracking or replacement of overlapping rectangles is described first.
+
+Both choices show a proposed move on a preview board before **Apply move** changes progress. Close
+returns without edits. Applying a move creates one undo step while the puzzle remains unfinished,
+prunes conflicting Sudoku notes, saves daily progress, and checks completion. Solving time pauses
+while hints are open. Hints are computed on the device, work offline, and require no prewritten
+puzzles, AI service, account, or network calls.
+
+Logical rules include Sudoku singles and cage totals, Mosaic clue counts and overlapping areas,
+Queens exclusions, Balance constraints, pipe orientation constraints, bond capacity, Shikaku
+rectangle candidates, legal path continuations, island boundaries, supported pieces, and possible
+five-square groups. They do not yet constitute a complete logical solver for every position.
 
 ## Daily collection and practice
 
@@ -111,8 +139,8 @@ storage is unavailable, the seen flag lasts for the current session only.
 - Entries, pencil notes, completion timestamps, and accumulated solving seconds are saved in
   localStorage. Daily progress resumes after reload. Undo/redo history is session-only. There is no
   cross-device sync or server-side profile.
-- Time stops on completion, while a tutorial, pause, rules, or settings dialog is open, while the
-  tab is hidden, and when leaving the puzzle. A hidden tab requires resuming.
+- Time stops on completion, while a hint, tutorial, pause, rules, or settings dialog is open, while
+  the tab is hidden, and when leaving the puzzle. A hidden tab requires resuming.
 - At midnight, the collection updates to the new day; an open puzzle stays on its original date so
   current work is not interrupted.
 
@@ -150,9 +178,11 @@ reduced-motion setting, this becomes a stationary highlight.
 - **Regional Queens:** click or tap to mark a large X, or drag across cells to paint Xs.
   Double-click or double-tap to place a queen. Tap a mark to clear it. Dragging preserves queens and
   is undone as one action. With a keyboard, arrows select and Space cycles the marks.
-- **Balance / Mosaic:** tap to cycle the cell's three states. In Mosaic, mark all unshaded squares
-  as empty. Mosaic clues turn red for excess shading, or for too little shading once their whole
-  neighborhood is decided. Untouched areas stay neutral; edges count only on-board cells.
+- **Balance / Mosaic:** tap to cycle an editable cell’s three states. Mosaic’s numbered squares have
+  fixed shading; only the unnumbered squares are editable. It finishes when shaded squares satisfy
+  every clue; empty marks are optional. Mosaic clues turn red for excess shading, or for too little
+  shading once their whole neighborhood is decided. Untouched areas stay neutral; edges count only
+  on-board cells.
 - **Shikaku:** drag between opposite corners, or tap two corners. Tap a placed rectangle to remove
   it. Invalid rectangles are rejected with a short message.
 - **Number Path:** drag or tap adjacent cells. Tap an earlier path cell to backtrack.
@@ -226,6 +256,8 @@ port; Compose's published port must match if you change it.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
 - `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
 - `src/input.ts`: Sudoku note cleanup and Queens tap/double-tap and drag gesture state.
+- `src/hints.ts`: local deductions and one-move reveals with preview explanations.
+- `src/tutorial-boards.json`: fixed finished teaching boards, independent of playable puzzles.
 - `src/tutorials.ts`: rules walkthroughs, visible-board highlights, and device first-visit flags.
 - `src/pwa.ts`: installation prompts, service worker registration, and offline status.
 - `src/service-worker.js`: offline cache lifecycle; Vite injects the build hash and asset list.
@@ -243,18 +275,22 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **27 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **35 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
 dates and progress storage, Sudoku note cleanup, Queens gestures, tutorial flags, and highlight
-bounds. Nurikabe's teaching examples are checked by the same validator as the game. Tutorial tests
-also prevent access to hidden puzzle solutions.
+bounds. Finished examples and Nurikabe’s teaching boards are checked by the same validators as the
+games. Tutorial and smart-hint tests prevent access to hidden puzzle solutions. Hint coverage checks
+sound deductions against valid completions, explicit correction previews, and progressive reveals
+for every game. Mosaic save migration preserves existing marks and elapsed time.
 
 Browser checks cover all twelve tutorials at phone, landscape, and desktop sizes; first visits,
 replay, daily/practice flags, paused time, and unchanged puzzle progress. Input checks include
 Sudoku multi-cell notes and single-note double taps, disabled completed digits, undo/redo, touch
-feedback, and saved daily completion.
+feedback, and saved daily completion. Hint checks cover both modes, preview isolation, paused time,
+apply/undo, responsive layouts, and offline use; Mosaic checks cover locked clues and completion
+without empty marks.
 
 Production PWA checks cover Chrome installability, offline reload and browser restart, saved
 progress, waiting updates, failed-update recovery, and cache cleanup. Physical iPhone installation

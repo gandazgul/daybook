@@ -163,8 +163,8 @@ export const META: Record<
     rules: [
       "Each clue must equal the number of shaded squares in its surrounding 3 × 3 area.",
       "Include the clue’s own square. At the edges, count only squares inside the grid.",
-      "Tap to cycle shaded → marked empty → undecided.",
-      "Decide every square to finish, including unshaded squares.",
+      "Numbered squares start in their correct shaded or unshaded state and cannot be changed. Tap other squares to shade, mark empty, or clear.",
+      "Finish when every clue matches the shaded squares. Empty marks are optional aids; unshaded squares can stay blank.",
       "A red clue means too much shading, or too little once its entire neighborhood is decided.",
     ],
     color: 0x6b7d8b,
@@ -780,6 +780,7 @@ function mosaic(p: Puzzle, rng: Random) {
     p.clues[i] = -1;
     if (countMosaic(p.clues, p.size) !== 1) p.clues[i] = v;
   }
+  p.initial = p.clues.map((clue, i) => clue >= 0 ? p.solution[i] : 0);
 }
 const cache = new Map<string, Puzzle>();
 export function generate(kind: Kind, seed: string): Puzzle {
@@ -852,7 +853,7 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
   const n = p.size;
   if (p.kind !== "snap" && a.length !== p.initial.length) return false;
   if (
-    (p.kind === "sudoku" || p.kind === "killer" || p.kind === "mambo") &&
+    (p.kind === "sudoku" || p.kind === "killer" || p.kind === "mambo" || p.kind === "mosaic") &&
     p.initial.some((v, i) => v && a[i] !== v)
   ) return false;
   switch (p.kind) {
@@ -926,7 +927,7 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
         numbers.every((v, i) => v === i + 1);
     }
     case "mosaic":
-      return a.every((v) => v === 1 || v === 2) &&
+      return a.every((v) => v === 0 || v === 1 || v === 2) &&
         p.clues.every((v, i) => v < 0 || neighborhood(i, n).filter((j) => a[j] === 1).length === v);
     case "dosun":
       return validDosun(p.regions, a, n);

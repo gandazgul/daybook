@@ -155,6 +155,30 @@ Deno.test("damaged saved entries recover to an editable starting board", () => {
   }
 });
 
+Deno.test("Mosaic completes with optional empty marks and still rejects incorrect shading", () => {
+  const p = generate("mosaic", "2026-09-09");
+  const shaded: number[] = p.solution.map((v, i) => p.initial[i] || (v === 1 ? 1 : 0));
+  assert(shaded.includes(0), "Fixture must have unshaded squares");
+  assert(isSolved(p, shaded), "Blank unshaded squares should be accepted");
+  const mixed = shaded.map((v, i) => v === 0 && i % 2 === 0 ? 2 : v);
+  assert(isSolved(p, mixed), "Any mixture of blank and marked-empty should be accepted");
+  assert(isSolved(p, p.solution), "Existing completed boards should still be accepted");
+  const missing = [...shaded];
+  missing[missing.indexOf(1)] = 0;
+  assert(!isSolved(p, missing), "Too little shading must not finish");
+  const excess = [...shaded];
+  excess[excess.indexOf(0)] = 1;
+  assert(!isSolved(p, excess), "Too much shading must not finish");
+  const invalid = [...shaded];
+  invalid[invalid.indexOf(0)] = 3;
+  assert(!isSolved(p, invalid), "Unknown cell states must not be accepted");
+  const store = new ProgressStore({ getItem: () => null, setItem: () => {} });
+  const saved = store.load(p);
+  saved.values = shaded;
+  store.save(p.seed, p.kind, saved);
+  assert(store.load(p).completed, "Previously saved correct shading should complete on reopening");
+});
+
 Deno.test("Mosaic clue feedback waits for decided neighborhoods and respects board edges", () => {
   const values = Array(36).fill(0);
   assert(!mosaicClueConflict(2, values, 0, 6), "untouched clue should stay neutral");
@@ -173,4 +197,27 @@ Deno.test("Mosaic clue feedback waits for decided neighborhoods and respects boa
   assert(mosaicClueConflict(3, values, 14, 6), "fully marked-empty neighborhood is too few");
   values[7] = values[8] = values[9] = 1;
   assert(!mosaicClueConflict(3, values, 14, 6), "correct interior count stays neutral");
+});
+
+Deno.test("Mosaic gives and locks clue states and upgrades old saves without resetting progress", () => {
+  const p = generate("mosaic", "2026-09-09");
+  p.initial.forEach((v, i) =>
+    assert(v === (p.clues[i] >= 0 ? p.solution[i] : 0), "Clue shading must be given")
+  );
+  const store = new ProgressStore({ getItem: () => null, setItem: () => {} });
+  const old = store.load(p), editable = p.clues.findIndex((v) => v < 0);
+  old.values.fill(0);
+  old.values[editable] = 2;
+  old.elapsed = 42;
+  old.notes = { 3: [1] };
+  store.save(p.seed, p.kind, old);
+  const loaded = store.load(p);
+  assert(
+    loaded.elapsed === 42 && loaded.values[editable] === 2 && loaded.notes[3][0] === 1,
+    "Migration must preserve the player's other state",
+  );
+  p.initial.forEach((v, i) => assert(!v || loaded.values[i] === v, "Restore fixed clue shading"));
+  const wrong = [...p.solution], clue = p.clues.findIndex((v) => v >= 0);
+  wrong[clue] = 3 - wrong[clue];
+  assert(!isSolved(p, wrong), "A changed clue state is not a valid completion");
 });

@@ -1,4 +1,4 @@
-import { generate, KINDS } from "../src/puzzles.ts";
+import { generate, isSolved, KINDS } from "../src/puzzles.ts";
 import { validNurikabe } from "../src/extra-puzzles.ts";
 import { TUTORIAL_KEY, tutorialSteps, TutorialStore } from "../src/tutorials.ts";
 
@@ -13,7 +13,7 @@ Deno.test("Every tutorial highlights visible board geometry without using answer
       const steps = tutorialSteps(puzzle);
       assert(steps.length >= 4, `${kind} needs a full walkthrough`);
       for (const step of steps) {
-        const size = step.example?.rows.length ?? puzzle.size;
+        const size = step.boardExample?.size ?? step.example?.rows.length ?? puzzle.size;
         assert(step.title && step.text && step.cells.length, `${kind}: empty tutorial step`);
         assert(
           step.cells.every((i) => Number.isInteger(i) && i >= 0 && i < size ** 2),
@@ -97,4 +97,31 @@ Deno.test("Tutorial flags tolerate damaged or unavailable local storage", () => 
   assert(!denied.hasSeen("atoms"), "Denied storage should allow a first tutorial");
   denied.markSeen("atoms");
   assert(denied.hasSeen("atoms"), "Denied storage should not repeat the tutorial in this session");
+});
+
+Deno.test("Every tutorial starts with a valid finished example independent of daily and practice puzzles", () => {
+  for (const kind of KINDS) {
+    const first = tutorialSteps(generate(kind, "2026-09-09"))[0];
+    const practice = tutorialSteps(generate(kind, "practice:finished-check"))[0];
+    assert(first.finished, `${kind}: must show the goal first`);
+    assert(JSON.stringify(first) === JSON.stringify(practice), `${kind}: demo must be independent`);
+    if (first.boardExample) {
+      const board = first.boardExample;
+      assert(
+        isSolved({ ...board, seed: "tutorial:finished-example:v1", solution: [] }, board.values),
+        `${kind}: finished example must satisfy the actual game rules`,
+      );
+    } else {
+      assert(kind === "nurikabe" && first.example, "Missing finished board");
+      const cells = [...first.example.rows.join("")];
+      assert(
+        validNurikabe(
+          cells.map((c) => /[1-9]/.test(c) ? Number(c) : 0),
+          cells.map((c) => c === "#" ? 1 : 2),
+          first.example.rows.length,
+        ),
+        "Finished Nurikabe example must be valid",
+      );
+    }
+  }
 });

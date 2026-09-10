@@ -1,9 +1,10 @@
 import Phaser from "phaser";
 import "./style.css";
+import { type Hint, revealHint, smartHint } from "./hints.ts";
 import { fiveRegions } from "./extra-puzzles.ts";
 import { gridLine, pruneSudokuNotes, QueensInput } from "./input.ts";
 import { installDaybook, pwa, startPwa } from "./pwa.ts";
-import { tutorialSteps, TutorialStore } from "./tutorials.ts";
+import { type TutorialStep, tutorialSteps, TutorialStore } from "./tutorials.ts";
 import {
   adjacent,
   generate,
@@ -28,7 +29,7 @@ import {
 } from "./storage.ts";
 
 type Page = "today" | "calendar" | "practice" | "game";
-type Modal = "help" | "pause" | "reset" | "settings" | "install" | "tutorial" | null;
+type Modal = "help" | "pause" | "reset" | "settings" | "install" | "tutorial" | "hint" | null;
 const LIGHT = {
   bg: 0xf6f5ef,
   panel: 0xfdfcf8,
@@ -83,6 +84,7 @@ class Daybook extends Phaser.Scene {
   modal: Modal = null;
   helpPage = 0;
   tutorialPage = 0;
+  hint?: Hint;
   puzzle?: Puzzle;
   progress?: Progress;
   selected = -1;
@@ -158,7 +160,7 @@ class Daybook extends Phaser.Scene {
     resize.observe(document.getElementById("game")!);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => resize.disconnect());
     this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _x: number, dy: number) => {
-      if ((!this.modal || this.modal === "tutorial") && this.contentHeight > this.H) {
+      if ((!this.modal || this.modal === "tutorial" || this.modal === "hint") && this.contentHeight > this.H) {
         this.scrollY = Phaser.Math.Clamp(this.scrollY + dy, 0, this.contentHeight - this.H + 20);
         this.draw();
       }
@@ -196,7 +198,7 @@ class Daybook extends Phaser.Scene {
       this.touchFeedback(p.x, p.y, Math.min(24, this.board.cell * .32));
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (!p.isDown || (this.modal && this.modal !== "tutorial") || (this.boardPointerId >= 0 && p.id !== this.boardPointerId)) {
+      if (!p.isDown || (this.modal && this.modal !== "tutorial" && this.modal !== "hint") || (this.boardPointerId >= 0 && p.id !== this.boardPointerId)) {
         return;
       }
       if (this.page !== "game" || this.pointerStart < 0) {
@@ -565,14 +567,14 @@ class Daybook extends Phaser.Scene {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", css(this.C.bg));
     document.documentElement.style.backgroundColor = css(this.C.bg);
     this.contentHeight = this.H;
-    if (this.modal === "tutorial") this.drawTutorial();
+    if (this.modal === "tutorial" || this.modal === "hint") this.drawTutorial();
     else if (this.page === "game") this.drawGame();
     else {
       this.header();
       if (this.page === "calendar") this.drawCalendarPage();
       else this.drawCollection();
     }
-    if (this.modal && this.modal !== "tutorial") this.drawModal();
+    if (this.modal && this.modal !== "tutorial" && this.modal !== "hint") this.drawModal();
     this.drawFocus();
     this.drawTouchFeedback();
   }
@@ -1139,9 +1141,54 @@ class Daybook extends Phaser.Scene {
     this.draw();
     this.announce("Tutorial closed. You can replay it with the Tutorial button.");
   }
+  openHint(mode?: "smart" | "reveal") {
+    if (!this.puzzle || !this.progress || this.progress.completed) return;
+    this.persist();
+    this.modal = "hint";
+    this.scrollY = 0;
+    this.focused = -1;
+    this.pointerStart = this.boardPointerId = -1;
+    this.rectStart = -1;
+    this.queensInput.reset();
+    this.sudokuTap = undefined;
+    this.touchPulses = [];
+    this.hint = mode === "smart" ? smartHint(this.puzzle, this.progress.values)
+      : mode === "reveal" ? revealHint(this.puzzle, this.progress.values) : undefined;
+    if (mode === "smart" && this.hint?.values) {
+      this.hint.text += " This assumes your existing entries and marks are correct.";
+    }
+    this.draw();
+    this.announce(this.hint?.text || "Choose a smart hint with an explanation, or reveal one move.");
+  }
+  closeHint() {
+    this.modal = null;
+    this.hint = undefined;
+    this.scrollY = 0;
+    this.draw();
+  }
+  applyHint() {
+    if (!this.hint?.values || !this.progress || this.modal !== "hint") return;
+    this.snapshot();
+    this.progress.values = [...this.hint.values];
+    if (this.puzzle!.kind === "sudoku" || this.puzzle!.kind === "killer") {
+      this.progress.notes = pruneSudokuNotes(this.progress.values, this.progress.notes, this.puzzle!.cages);
+    }
+    this.modal = null;
+    this.hint = undefined;
+    this.selected = -1;
+    this.selectedCells.clear();
+    this.scrollY = 0;
+    this.changed();
+  }
   drawTutorial() {
-    const p = this.puzzle!, c = this.C, steps = tutorialSteps(p), step = steps[this.tutorialPage];
-    const n = step.example?.rows.length ?? p.size;
+    const p = this.puzzle!, c = this.C, inHint = this.modal === "hint";
+    const steps: TutorialStep[] = inHint ? [this.hint ?? {
+      title: "A little help",
+      text: "Smart hint explains a logical next move or elimination using your entries. Reveal move gives one move from a generated solution. Preview either here before applying it to your puzzle.",
+      cells: Array.from({ length: p.size ** 2 }, (_, i) => i),
+    }] : tutorialSteps(p);
+    const step = steps[inHint ? 0 : this.tutorialPage];
+    const n = step.boardExample?.size ?? step.example?.rows.length ?? p.size;
     const legendHeight = steps.some((item) => item.example) ? 30 : 0;
     const margin = 16, top = 80, gap = 24;
     const wide = this.W >= 760 || this.W > this.H;
@@ -1167,18 +1214,27 @@ class Daybook extends Phaser.Scene {
     const cardX = wide ? left + boardSpace + gap : (this.W - cardWidth) / 2;
     const cardY = wide ? top : by + size + gap + legendHeight;
     this.text(left, 19, META[p.kind].name, 20, c.ink, "Georgia", width - 88);
-    this.text(left, 51, `${step.example ? "RULE EXAMPLE" : "TUTORIAL"} · ${this.tutorialPage + 1} OF ${steps.length}`, 12, c.accent).setLetterSpacing(1);
-    this.button(left + width - 72, 18, 72, 40, "Skip", () => this.finishTutorial()).setFontSize(16);
+    this.text(left, 51, inHint ? (this.hint?.values ? "HINT · PROPOSED MOVE" : "HINT") : `${step.finished ? "FINISHED EXAMPLE" : step.example ? "RULE EXAMPLE" : "TUTORIAL"} · ${this.tutorialPage + 1} OF ${steps.length}`, 12, c.accent).setLetterSpacing(1);
+    this.button(left + width - 72, 18, 72, 40, inHint ? "Close" : "Skip", () => inHint ? this.closeHint() : this.finishTutorial()).setFontSize(16);
 
     this.board = { x: bx, y: by, cell: size / n, n };
-    // Reuse the player's board without editing progress or showing old selection highlights.
-    const selected = this.selected, selectedCells = this.selectedCells;
+    // Render fixed examples through the same board renderer, restoring all player state synchronously.
+    const selected = this.selected, selectedCells = this.selectedCells, progress = this.progress;
     this.selected = -1;
     this.selectedCells = new Set();
     try {
-      if (step.example) this.drawNurikabeExample(step.example.rows);
+      if (step.boardExample) {
+        this.puzzle = { ...step.boardExample, seed: "tutorial:finished-example:v1", solution: [] };
+        this.progress = { values: step.boardExample.values, notes: {}, elapsed: 0, completed: true };
+        this.drawBoard();
+      } else if (inHint && this.hint?.values) {
+        this.progress = { ...this.progress!, values: this.hint.values };
+        this.drawBoard();
+      } else if (step.example) this.drawNurikabeExample(step.example.rows);
       else this.drawBoard();
     } finally {
+      this.puzzle = p;
+      this.progress = progress;
       this.selected = selected;
       this.selectedCells = selectedCells;
     }
@@ -1226,9 +1282,17 @@ class Daybook extends Phaser.Scene {
     this.children.bringToTop(title);
     this.children.bringToTop(body);
     const buttonY = cardY + height - pad - 42, buttonWidth = (textWidth - 10) / 2;
+    if (inHint) {
+      this.button(cardX + pad, buttonY, buttonWidth, 42, this.hint ? "Hints" : "Smart hint",
+        () => this.openHint(this.hint ? undefined : "smart"));
+      this.button(cardX + pad + buttonWidth + 10, buttonY, buttonWidth, 42,
+        this.hint ? this.hint.values ? "Apply move" : "Close" : "Reveal move",
+        () => this.hint ? this.hint.values ? this.applyHint() : this.closeHint() : this.openHint("reveal"), true);
+    } else {
     this.button(cardX + pad, buttonY, buttonWidth, 42, "Previous", () => this.advanceTutorial(-1), false, this.tutorialPage === 0).setFontSize(16);
     this.button(cardX + pad + buttonWidth + 10, buttonY, buttonWidth, 42,
       this.tutorialPage === steps.length - 1 ? "Finish" : "Next", () => this.advanceTutorial(1), true).setFontSize(16);
+    }
     this.contentHeight = Math.max(this.H, by + size + legendHeight + margin, cardY + height + margin);
     if (this.scrollY) {
       this.children.getAll().forEach((object) => {
@@ -1374,7 +1438,8 @@ class Daybook extends Phaser.Scene {
         size,
       );
       const tutorialY = ty + 53 + help.height + 14;
-      this.button(bx, tutorialY, size, 40, "Tutorial", () => this.startTutorial());
+      this.button(bx, tutorialY, (size - 10) / 2, 40, "Tutorial", () => this.startTutorial());
+      this.button(bx + (size + 10) / 2, tutorialY, (size - 10) / 2, 40, "Hint", () => this.openHint());
       this.contentHeight = Math.max(this.contentHeight, tutorialY + 64);
     } else {
       const sx = m + Math.min(w, 690) + 32, sw = w - (sx - m);
@@ -1397,7 +1462,8 @@ class Daybook extends Phaser.Scene {
       }
       const helpY = this.showTimer ? by + 108 : by - 5;
       this.text(sx, helpY, "HOW TO PLAY", 10, c.accent).setLetterSpacing(1.5);
-      this.button(sx, helpY + 24, sw, 40, "Tutorial", () => this.startTutorial());
+      this.button(sx, helpY + 24, (sw - 10) / 2, 40, "Tutorial", () => this.startTutorial());
+      this.button(sx + (sw + 10) / 2, helpY + 24, (sw - 10) / 2, 40, "Hint", () => this.openHint());
       const rulesHeight = this.drawRules(sx, helpY + 82, sw, META[p.kind].rules);
       const controlsY = Math.max(helpY + 249, helpY + 82 + rulesHeight + 24);
       if (p.kind === "sudoku" || p.kind === "killer") {
@@ -1500,7 +1566,7 @@ class Daybook extends Phaser.Scene {
       case "mambo":
         return "Tap for a circle, a diamond, or an empty square.";
       case "mosaic":
-        return "Tap to shade, mark empty, or clear. Count each 3 × 3 neighborhood.";
+        return "Numbered squares are fixed. Tap other squares to shade; empty marks are optional.";
       case "dosun":
         return "Tap: balloon → weight → X → clear. X marks are optional.";
       case "nurikabe":
@@ -2010,7 +2076,8 @@ class Daybook extends Phaser.Scene {
     this.selected = i;
     if (
       p.kind === "fivecells" || (p.kind === "dosun" && p.regions[i] < 0) ||
-      (p.kind === "nurikabe" && p.clues[i] > 0)
+      (p.kind === "nurikabe" && p.clues[i] > 0) ||
+      (p.kind === "mosaic" && p.initial[i] > 0)
     ) {
       this.draw();
       return;
