@@ -144,6 +144,18 @@ class Daybook extends Phaser.Scene {
     globalThis.addEventListener("daybook:pwa", () => {
       if (this.page !== "game" || this.modal === "install") this.draw();
     });
+    globalThis.addEventListener("daybook:before-update", (event) => {
+      this.persist();
+      if (this.page !== "game" || !this.puzzle || !this.progress) return;
+      try {
+        sessionStorage.setItem("daybook:update-resume:v1", JSON.stringify({
+          kind: this.puzzle.kind, seed: this.puzzle.seed, progress: this.progress,
+        }));
+      } catch {
+        // Do not discard a running puzzle if this device cannot save its reload snapshot.
+        event.preventDefault();
+      }
+    });
     startPwa();
     this.scale.on("resize", () => {
       this.scrollY = 0;
@@ -299,7 +311,28 @@ class Daybook extends Phaser.Scene {
       }
     });
     globalThis.addEventListener("pagehide", () => this.persist());
+    this.restoreAfterUpdate();
     this.draw();
+  }
+  restoreAfterUpdate() {
+    try {
+      const raw = sessionStorage.getItem("daybook:update-resume:v1");
+      sessionStorage.removeItem("daybook:update-resume:v1");
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!KINDS.includes(saved.kind) || typeof saved.seed !== "string" || saved.seed.length > 200 ||
+        !(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(saved.seed) || saved.seed.startsWith("practice:"))) return;
+      // ProgressStore validates entries and reapplies any new fixed clues before rendering.
+      if (saved.progress && (saved.seed.startsWith("practice:") || !store.available)) {
+        const temporary = new ProgressStore({
+          getItem: () => JSON.stringify({ [`${saved.seed}/${saved.kind}`]: saved.progress }),
+          setItem: () => {},
+        });
+        const progress = temporary.get(saved.seed, saved.kind);
+        if (progress) store.save(saved.seed, saved.kind, progress);
+      }
+      this.openGame(saved.kind, saved.seed);
+    } catch { /* A damaged or unavailable snapshot should not prevent the app from opening. */ }
   }
   override update(_time: number, delta: number) {
     this.drawTouchFeedback();
@@ -775,7 +808,7 @@ class Daybook extends Phaser.Scene {
         m,
         installY + (pwa.installed ? 0 : 52),
         pwa.ready ? pwa.updateWaiting
-          ? "Available offline · Close and reopen Daybook to update."
+          ? "Available offline · Update ready."
           : "Available offline" : pwa.failed
           ? "Offline setup needs a connection. Open Daybook again online."
           : "Preparing offline play…",
@@ -1425,10 +1458,13 @@ class Daybook extends Phaser.Scene {
         this.modal = "pause";
         this.draw();
       });
-      this.contentHeight = Math.max(this.H, ty + 100);
+      const tutorialY = ty + 52;
+      this.button(bx, tutorialY, (size - 10) / 2, 40, "Tutorial", () => this.startTutorial());
+      this.button(bx + (size + 10) / 2, tutorialY, (size - 10) / 2, 40, "Hint", () => this.openHint());
+      const helpY = tutorialY + 53;
       const help = this.text(
         bx,
-        ty + 53,
+        helpY,
         this.progress.completed
           ? "Beautifully done. Take a breath."
           : this.notice || this.shortHelp(p.kind),
@@ -1437,10 +1473,7 @@ class Daybook extends Phaser.Scene {
         undefined,
         size,
       );
-      const tutorialY = ty + 53 + help.height + 14;
-      this.button(bx, tutorialY, (size - 10) / 2, 40, "Tutorial", () => this.startTutorial());
-      this.button(bx + (size + 10) / 2, tutorialY, (size - 10) / 2, 40, "Hint", () => this.openHint());
-      this.contentHeight = Math.max(this.contentHeight, tutorialY + 64);
+      this.contentHeight = Math.max(this.H, helpY + help.height + 24);
     } else {
       const sx = m + Math.min(w, 690) + 32, sw = w - (sx - m);
       if (this.showTimer) {

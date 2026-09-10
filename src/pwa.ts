@@ -45,8 +45,31 @@ export async function installDaybook() {
     changed();
   }
 }
+let started = false;
 export function startPwa() {
-  if (!pwa.enabled) return;
+  if (!pwa.enabled || started) return;
+  started = true;
+  let hadController = !!navigator.serviceWorker.controller;
+  let refreshPending = false, refreshing = false;
+  const refresh = () => {
+    if (!refreshPending || refreshing || document.hidden) return;
+    // The game synchronously saves the open puzzle (including practice) before navigation.
+    if (!globalThis.dispatchEvent(new Event("daybook:before-update", { cancelable: true }))) {
+      pwa.updateWaiting = true;
+      changed();
+      return;
+    }
+    refreshing = true;
+    location.reload();
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) {
+      refreshPending = true;
+      refresh();
+    }
+    hadController = true;
+  });
+  document.addEventListener("visibilitychange", refresh);
   // An already installed worker remains ready even when an offline update check fails.
   void navigator.serviceWorker.ready.then(() => {
     pwa.ready = true;
@@ -55,14 +78,17 @@ export function startPwa() {
   });
   navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" })
     .then((registration) => {
-      pwa.updateWaiting = !!registration.waiting;
-      changed();
+      const activate = () => {
+        pwa.updateWaiting = !!registration.waiting;
+        registration.waiting?.postMessage({ type: "ACTIVATE_UPDATE" });
+        changed();
+      };
+      activate();
       const watch = () => {
         const worker = registration.installing;
         worker?.addEventListener("statechange", () => {
           if (worker.state === "installed" && registration.active) {
-            pwa.updateWaiting = true;
-            changed();
+            activate();
           }
           if (worker.state === "redundant" && !registration.active) {
             pwa.failed = true;
@@ -72,11 +98,25 @@ export function startPwa() {
       };
       watch();
       registration.addEventListener("updatefound", watch);
-      // Check again when returning to the app; a waiting worker activates after all tabs close.
-      globalThis.addEventListener("online", () => void registration.update().catch(() => {}));
+      let checking = false;
+      const check = async () => {
+        if (checking || document.hidden || !navigator.onLine) return;
+        checking = true;
+        try {
+          await registration.update();
+        } catch {
+          /* Keep the working offline copy. */
+        } finally {
+          checking = false;
+        }
+      };
+      globalThis.addEventListener("online", () => void check());
+      globalThis.addEventListener("pageshow", () => void check());
       document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) void registration.update().catch(() => {});
+        if (!document.hidden) void check();
       });
+      setInterval(() => void check(), 60_000);
+      void check();
     })
     .catch(() => {
       pwa.failed = !pwa.ready;

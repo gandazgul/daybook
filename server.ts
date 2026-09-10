@@ -36,7 +36,11 @@ Deno.serve({ port: Number(Deno.env.get("PORT") || 8000), hostname: "0.0.0.0" }, 
           (path === "/" ? mime.html : "application/octet-stream"),
         "Cache-Control": path.startsWith("/assets/")
           ? "public, max-age=31536000, immutable"
-          : "no-cache",
+          : "no-store, max-age=0",
+        ...(path.startsWith("/assets/") ? {} : {
+          "CDN-Cache-Control": "no-store",
+          "Cloudflare-CDN-Cache-Control": "no-store",
+        }),
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Content-Security-Policy":

@@ -72,10 +72,15 @@ localStorage; there is no account or server download needed for each day's puzzl
 
 The production build generates a versioned service worker that caches the complete app shell and
 install icons. It never caches health checks or third-party requests. Updates download in the
-background when online and wait until all Daybook tabs/windows close before activating. This keeps
-an open puzzle on one consistent build; the previous app cache is removed after activation. Saved
-puzzle progress is preserved across updates. Clearing browser/site data also removes the offline
-cache and progress, and browsers may evict stored data when device space is low.
+background when online, on returning to the app, and once a minute while it is visible. A complete
+new shell activates immediately; the app saves the open puzzle and reloads into the new release. The
+same daily or practice puzzle reopens with its entries, notes and elapsed time. Old app caches are
+removed only after the new shell has downloaded successfully; failed downloads keep the working
+offline version. HTML, service-worker and other unversioned responses forbid browser/CDN caching;
+hashed game assets stay cacheable. Existing installations from before this updater may need one
+online refresh to start using it. Saved puzzle progress is preserved across updates. Clearing
+browser/site data also removes the offline cache and progress, and browsers may evict stored data
+when device space is low.
 
 Installation requires HTTPS (localhost also works for testing). Development mode does not register a
 service worker, keeping local edits fresh. To test offline support, run `deno task build` followed
@@ -275,7 +280,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **35 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **39 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
@@ -293,8 +298,8 @@ apply/undo, responsive layouts, and offline use; Mosaic checks cover locked clue
 without empty marks.
 
 Production PWA checks cover Chrome installability, offline reload and browser restart, saved
-progress, waiting updates, failed-update recovery, and cache cleanup. Physical iPhone installation
-has not been verified on a device.
+progress, automatic upgrades with daily/practice resume, failed-update recovery, and cache cleanup.
+Physical iPhone installation has not been verified on a device.
 
 The Dockerfile has been built and tested with Podman for `linux/amd64` on Apple Silicon. The
 container passes health and asset checks with a non-root user, read-only filesystem, dropped

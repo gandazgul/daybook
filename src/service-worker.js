@@ -12,8 +12,13 @@ self.addEventListener("install", (event) => {
       await caches.delete(CACHE_NAME);
       throw error;
     }
-    // Wait for existing sessions to close; never replace an open puzzle's build.
+    // Switch only after the entire new shell is available offline.
+    await self.skipWaiting();
   })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
