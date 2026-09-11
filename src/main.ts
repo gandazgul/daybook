@@ -116,6 +116,9 @@ class Daybook extends Phaser.Scene {
   touchGraphics?: Phaser.GameObjects.Graphics;
   reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   clockText?: Phaser.GameObjects.Text;
+  private textCache = new Map<string, Phaser.GameObjects.Text[]>();
+  private nextTextCache?: Map<string, Phaser.GameObjects.Text[]>;
+  private textCacheContext = "";
   notice = "";
   saveClock = 0;
   today = dateKey();
@@ -420,13 +423,27 @@ class Daybook extends Phaser.Scene {
     font = "Arial",
     width?: number,
   ) {
-    return this.add.text(x, y, text, {
+    const key = JSON.stringify([x, y, text, size, color, font, width]);
+    const cached = this.nextTextCache ? this.textCache.get(key)?.pop() : undefined;
+    const label = cached || this.add.text(x, y, text, {
       fontFamily: font,
       fontSize: `${size}px`,
       color: css(color),
       lineSpacing: 6,
       ...(width ? { wordWrap: { width, useAdvancedWrap: true } } : {}),
     }).setResolution(RENDER_SCALE);
+    if (cached) {
+      // Restore placement before callers apply their alignment/scale. The text texture
+      // and digit metrics remain intact; setText is a no-op unless the timer changed it.
+      this.add.existing(label);
+      label.setPosition(x, y).setOrigin(0).setScale(1).setText(text);
+    }
+    if (this.nextTextCache) {
+      const entries = this.nextTextCache.get(key) || [];
+      entries.push(label);
+      this.nextTextCache.set(key, entries);
+    }
+    return label;
   }
   line(x1: number, y1: number, x2: number, y2: number, color = this.C.line, width = 1) {
     this.add.graphics().lineStyle(width, color).lineBetween(x1, y1, x2, y2);
@@ -599,8 +616,23 @@ class Daybook extends Phaser.Scene {
     );
   }
   draw() {
-    // DisplayList.removeAll only detaches objects; destroy also unregisters their input areas.
-    this.children.getAll().forEach((object) => object.destroy());
+    // Sudoku redraws after every tap and keystroke. Keep unchanged text textures
+    // instead of allocating and uploading hundreds of high-resolution note canvases.
+    const context = this.page === "game" && !this.modal && !this.progress?.completed &&
+        (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer")
+      ? JSON.stringify([this.puzzle.kind, this.puzzle.seed, this.W, this.H, this.night, this.scrollY])
+      : "";
+    const retained = context && context === this.textCacheContext
+      ? new Set([...this.textCache.values()].flat())
+      : new Set<Phaser.GameObjects.GameObject>();
+    // Rebuild input areas so their enabled state and callbacks always reflect the move.
+    this.children.getAll().forEach((object) => {
+      if (retained.has(object)) this.children.remove(object);
+      else object.destroy();
+    });
+    if (!retained.size) this.textCache.clear();
+    this.textCacheContext = context;
+    this.nextTextCache = context ? new Map() : undefined;
     this.controls = [];
     this.clockText = undefined;
     this.focusOutline = undefined;
@@ -618,6 +650,10 @@ class Daybook extends Phaser.Scene {
     if (this.modal && this.modal !== "tutorial" && this.modal !== "hint") this.drawModal();
     this.drawFocus();
     this.drawTouchFeedback();
+    // Discard removed notes/changed labels immediately; the cache is bounded by one screen.
+    for (const entries of this.textCache.values()) for (const text of entries) text.destroy();
+    this.textCache = this.nextTextCache || new Map();
+    this.nextTextCache = undefined;
   }
   drawFocus() {
     this.focusOutline?.destroy();
@@ -1871,6 +1907,11 @@ class Daybook extends Phaser.Scene {
             : notePad;
           const noteHeight = s - noteTop - notePad;
           const slotWidth = (s - notePad * 2) / 3, slotHeight = noteHeight / 3;
+          // Use the cage-total cell's available height for every Killer candidate.
+          // Cells without totals keep their corner positions but use the same digit size.
+          const fitHeight = p.kind === "killer"
+            ? (s - 1 - Math.max(10, s * .26) - notePad) / 3
+            : slotHeight;
           for (const v of state.notes[i] || []) {
             const note = this.text(
               xx + notePad + ((v - 1) % 3 + .5) * slotWidth,
@@ -1881,8 +1922,10 @@ class Daybook extends Phaser.Scene {
             ).setOrigin(.5);
             // Measure digit ink instead of reserving unused ascender/descender space.
             // Fit all nine candidates tightly into their slots, including below cage totals.
-            note.setStyle({ testString: "0123456789", lineSpacing: 0 });
-            note.setScale(Math.min(1, (slotWidth - .75) / note.width, (slotHeight - .75) / note.height));
+            if (note.style.testString !== "0123456789") {
+              note.setStyle({ testString: "0123456789", lineSpacing: 0 });
+            }
+            note.setScale(Math.min(1, (slotWidth - .75) / note.width, (fitHeight - .75) / note.height));
           }
         }
       } else if (p.kind === "queens") {
@@ -1924,13 +1967,14 @@ class Daybook extends Phaser.Scene {
     }
     if (sudokuGrid) {
       const gaps = this.add.graphics().fillStyle(c.bg);
-      for (let i = 1; i < n; i++) {
+      // Center the same spacing on the perimeter as on each internal box boundary.
+      for (let i = 0; i <= n; i++) {
         const gap = i % 3 === 0 ? 4 : 2;
         gaps.fillRect(x + i * s - gap / 2, y, gap, size);
         gaps.fillRect(x, y + i * s - gap / 2, size, gap);
       }
       const boxBorders = this.add.graphics().lineStyle(2, 0x000000);
-      boxBorders.strokeRect(x + 1, y + 1, size - 2, size - 2);
+      boxBorders.strokeRect(x, y, size, size);
       for (let i = 3; i < n; i += 3) {
         boxBorders.lineBetween(x + i * s, y, x + i * s, y + size);
         boxBorders.lineBetween(x, y + i * s, x + size, y + i * s);
@@ -2023,8 +2067,10 @@ class Daybook extends Phaser.Scene {
     for (const cage of p.cages) {
       const set = new Set(cage.cells);
       const first = cage.cells[0], cx = x + first % n * s, cy = y + (first / n | 0) * s;
-      const label = this.text(cx + 2.5, cy + 2.5, String(cage.sum), Math.max(10, s * .26), this.C.ink)
-        .setStyle({ testString: "0123456789", lineSpacing: 0 });
+      const label = this.text(cx + 2.5, cy + 2.5, String(cage.sum), Math.max(10, s * .26), this.C.ink);
+      if (label.style.testString !== "0123456789") {
+        label.setStyle({ testString: "0123456789", lineSpacing: 0 });
+      }
       for (const i of cage.cells) {
         const xx = x + i % n * s, yy = y + (i / n | 0) * s, pad = 3;
         const top = !set.has(i - n), bottom = !set.has(i + n);
