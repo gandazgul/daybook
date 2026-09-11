@@ -141,7 +141,7 @@ export function solveDosun(regions: number[], n: number, limit = 2) {
   return { count, solution };
 }
 
-export function generateDosun(p: Puzzle, rng: Random) {
+export function generateDosun(p: Puzzle, rng: Random, allowTrivial = false) {
   const n = p.size;
   // Start from supported chambers, then reshape connected regions while retaining
   // a single solution. Moving any boundary cell can introduce supported stacks.
@@ -175,6 +175,58 @@ export function generateDosun(p: Puzzle, rng: Random) {
     if (remaining.length !== 1 || remaining[0].length < 2 || solveDosun(p.regions, n).count !== 1) {
       p.regions[i] = previous;
     }
+  }
+  const ceilingAndFloor = p.regions.map((r, i) =>
+    r < 0
+      ? -1
+      : i < n || p.regions[i - n] < 0
+      ? 1
+      : i >= n * (n - 1) || p.regions[i + n] < 0
+      ? 2
+      : 0
+  );
+  if (!allowTrivial && validDosun(p.regions, ceilingAndFloor, n)) {
+    // Reshaping can exhaust its budget without making the chambers interesting.
+    // This independently generated, unique board requires pieces supported by other pieces.
+    if (n !== 6) throw new Error("Dosun-Fuwari fallback requires a 6 × 6 board");
+    p.regions = [
+      0,
+      1,
+      2,
+      3,
+      4,
+      4,
+      0,
+      1,
+      2,
+      3,
+      5,
+      5,
+      -1,
+      -1,
+      2,
+      -1,
+      5,
+      -1,
+      6,
+      7,
+      2,
+      5,
+      5,
+      8,
+      6,
+      7,
+      2,
+      2,
+      9,
+      8,
+      6,
+      6,
+      9,
+      9,
+      9,
+      8,
+    ];
   }
   const ids = [...new Set(p.regions.filter((r) => r >= 0))];
   p.regions = p.regions.map((r) => r < 0 ? -1 : ids.indexOf(r));

@@ -10,8 +10,20 @@ import {
 /** All generation is deterministic. Bump this version if generation changes after release. */
 export const GENERATOR_VERSION = 1;
 // These persisted identifiers also seed generation; keep them stable when display names change.
-export type Kind = "sudoku" | "pipes" | "atoms" | "killer" | "queens" | "shikaku" |
-  "snap" | "mambo" | "mosaic" | "sets" | "dosun" | "nurikabe" | "fivecells";
+export type Kind =
+  | "sudoku"
+  | "pipes"
+  | "atoms"
+  | "killer"
+  | "queens"
+  | "shikaku"
+  | "snap"
+  | "mambo"
+  | "mosaic"
+  | "sets"
+  | "dosun"
+  | "nurikabe"
+  | "fivecells";
 export const KINDS: readonly Kind[] = [
   "pipes",
   "atoms",
@@ -575,8 +587,8 @@ export function rectangle(a: number, b: number, n: number) {
   for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) cells.push(y * n + x);
   return cells;
 }
-export function countShikaku(clues: number[], n: number, limit = 2): number {
-  const options = clues.flatMap((area, i) => {
+export function shikakuOptions(clues: number[], n: number): number[][][] {
+  return clues.flatMap((area, i) => {
     if (!area) return [];
     const rects: number[][] = [];
     for (let h = 1; h <= n; h++) {
@@ -594,6 +606,9 @@ export function countShikaku(clues: number[], n: number, limit = 2): number {
     }
     return [rects];
   });
+}
+export function countShikaku(clues: number[], n: number, limit = 2): number {
+  const options = shikakuOptions(clues, n);
   let count = 0;
   const occupied = new Set<number>();
   const visit = (remaining: number[]) => {
@@ -620,7 +635,7 @@ export function countShikaku(clues: number[], n: number, limit = 2): number {
   visit(options.map((_, i) => i));
   return count;
 }
-function shikaku(p: Puzzle, rng: Random) {
+export function generateShikaku(p: Puzzle, rng: Random, allowTrivial = false) {
   const n = p.size;
   for (let attempt = 0; attempt < 500; attempt++) {
     const rects: number[][] = [];
@@ -642,14 +657,100 @@ function shikaku(p: Puzzle, rng: Random) {
     split(0, 0, n, n);
     const clues = Array(n * n).fill(0);
     rects.forEach((cells) => clues[rng.pick(cells)] = cells.length);
-    if (countShikaku(clues, n) === 1) {
+    if (
+      (allowTrivial ||
+        shikakuOptions(clues, n).filter((options) => options.length > 1).length >= 2) &&
+      countShikaku(clues, n) === 1
+    ) {
       p.clues = clues;
       p.solution = Array(n * n).fill(0);
       rects.forEach((cells, i) => cells.forEach((c) => p.solution[c] = i + 1));
       return;
     }
   }
-  // A clue in every leftmost cell forces one full-width rectangle per row.
+  if (!allowTrivial) {
+    // Independently generated and solver-verified: neighboring rectangles constrain
+    // each other, unlike the old fallback of six immediately forced strips.
+    if (n !== 6) throw new Error("Shikaku fallback requires a 6 × 6 board");
+    p.clues = [
+      0,
+      0,
+      0,
+      0,
+      0,
+      6,
+      2,
+      6,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      4,
+      0,
+      0,
+      3,
+      0,
+      0,
+      3,
+      3,
+      0,
+      0,
+      6,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ];
+    p.solution = [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      4,
+      4,
+      4,
+      7,
+      7,
+      2,
+      4,
+      4,
+      4,
+      7,
+      7,
+      3,
+      5,
+      5,
+      5,
+      8,
+      9,
+      3,
+      6,
+      6,
+      6,
+      8,
+      9,
+      3,
+      6,
+      6,
+      6,
+      8,
+      9,
+    ];
+    return;
+  }
+  // Preserve the original fallback for already-published daily boards.
   p.clues = Array.from({ length: n * n }, (_, i) => i % n === 0 ? n : 0);
   p.solution = Array.from({ length: n * n }, (_, i) => (i / n | 0) + 1);
 }
@@ -791,7 +892,7 @@ export function countMosaic(clues: number[], n: number, limit = 2): number {
   visit(Array(n * n).fill(0));
   return count;
 }
-function mosaic(p: Puzzle, rng: Random) {
+function mosaicCandidate(p: Puzzle, rng: Random) {
   p.solution = Array.from({ length: p.size ** 2 }, () => rng.next() < .48 ? 1 : 2);
   // The complete clues on a 6 × 6 board are invertible; remove only redundant clues.
   p.clues = p.solution.map((_, i) =>
@@ -804,6 +905,94 @@ function mosaic(p: Puzzle, rng: Random) {
   }
   p.initial = p.clues.map((clue, i) => clue >= 0 ? p.solution[i] : 0);
 }
+export function generateMosaic(p: Puzzle, rng: Random, allowTrivial = false) {
+  for (let attempt = 0; attempt < 32; attempt++) {
+    mosaicCandidate(p, rng);
+    // Clue cells are given and empty marks are optional. Count only shading
+    // the player still has to do, not the number of undecided cells.
+    if (allowTrivial || p.solution.filter((v, i) => v === 1 && !p.initial[i]).length >= 4) return;
+  }
+  // A bounded, independently generated fallback with six shaded cells left to find.
+  if (p.size !== 6) throw new Error("Mosaic fallback requires a 6 × 6 board");
+  p.clues = [
+    -1,
+    2,
+    2,
+    2,
+    1,
+    -1,
+    -1,
+    4,
+    -1,
+    -1,
+    2,
+    -1,
+    2,
+    4,
+    -1,
+    4,
+    -1,
+    2,
+    3,
+    -1,
+    4,
+    3,
+    4,
+    2,
+    -1,
+    2,
+    -1,
+    3,
+    -1,
+    3,
+    -1,
+    2,
+    2,
+    -1,
+    -1,
+    2,
+  ];
+  p.solution = [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    1,
+    2,
+    1,
+    1,
+    2,
+    2,
+    1,
+    2,
+    1,
+    2,
+    2,
+    1,
+    2,
+    2,
+    2,
+    1,
+    2,
+    1,
+    1,
+    1,
+    2,
+    1,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    1,
+    1,
+  ];
+  p.initial = p.clues.map((clue, i) => clue >= 0 ? p.solution[i] : 0);
+}
+
 const cache = new Map<string, Puzzle>();
 export function generate(kind: Kind, seed: string): Puzzle {
   const key = `v${GENERATOR_VERSION}:${kind}:${seed}`;
@@ -818,6 +1007,8 @@ export function generate(kind: Kind, seed: string): Puzzle {
       ? 5
       : 6;
   const p = blank(kind, seed, size);
+  // Keep today and archived daily layouts stable; practice and future days get quality guards.
+  const allowTrivial = /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-12";
   switch (kind) {
     case "sudoku":
     case "killer":
@@ -833,7 +1024,7 @@ export function generate(kind: Kind, seed: string): Puzzle {
       atoms(p, rng);
       break;
     case "shikaku":
-      shikaku(p, rng);
+      generateShikaku(p, rng, allowTrivial);
       break;
     case "snap":
       snap(p, rng);
@@ -845,10 +1036,10 @@ export function generate(kind: Kind, seed: string): Puzzle {
       generateSets(p, rng);
       break;
     case "mosaic":
-      mosaic(p, rng);
+      generateMosaic(p, rng, allowTrivial);
       break;
     case "dosun":
-      generateDosun(p, rng);
+      generateDosun(p, rng, allowTrivial);
       break;
     case "nurikabe":
       // Date-version this change so older daily boards and their saved entries stay intact.

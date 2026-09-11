@@ -64,6 +64,12 @@ orthogonally adjacent grid cells. Mosaic is a gentler Fill-a-Pix variant: number
 with their correct shading locked; empty marks on other squares are optional aids and unshaded
 squares can stay blank. Unused Dosun-Fuwari squares can stay blank.
 
+Quality guards reject Shikaku boards where every rectangle is immediately forced, Dosun-Fuwari
+boards solved just by filling each ceiling and floor, and hidden Mosaic boards with fewer than four
+shaded cells left to find. Bounded fallbacks satisfy the same checks and have unique solutions.
+These guards apply to practice and daily boards from September 12, 2026; earlier daily layouts and
+saved progress stay unchanged. Mosaic remains hidden and does not count toward daily completion.
+
 New Nurikabe daily boards from September 11, 2026, and all new practice boards include at least
 one island larger than 1, including the generation fallback. Earlier daily boards remain unchanged
 to preserve saved progress. All new boards still have a solver-checked unique solution.
@@ -303,7 +309,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **48 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **54 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
