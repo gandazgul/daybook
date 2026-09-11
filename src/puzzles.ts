@@ -1,3 +1,4 @@
+import { findSets, generateSets } from "./sets.ts";
 import {
   generateDosun,
   generateFiveCells,
@@ -9,25 +10,30 @@ import {
 /** All generation is deterministic. Bump this version if generation changes after release. */
 export const GENERATOR_VERSION = 1;
 // These persisted identifiers also seed generation; keep them stable when display names change.
-export const KINDS = [
-  "sudoku",
+export type Kind = "sudoku" | "pipes" | "atoms" | "killer" | "queens" | "shikaku" |
+  "snap" | "mambo" | "mosaic" | "sets" | "dosun" | "nurikabe" | "fivecells";
+export const KINDS: readonly Kind[] = [
   "pipes",
   "atoms",
-  "killer",
   "queens",
   "shikaku",
   "snap",
   "mambo",
-  "mosaic",
+  // "mosaic", // Hidden for now. Keep its generator, rules, hints and saved progress.
+  "sets",
   "dosun",
   "nurikabe",
   "fivecells",
+  "sudoku",
+  "killer",
 ] as const;
 export const EXTRA_GAMES_START = "2026-09-09";
 export function kindsForDate(date: string): readonly Kind[] {
-  return date < EXTRA_GAMES_START ? KINDS.slice(0, 9) : KINDS;
+  return KINDS.filter((kind) =>
+    (kind !== "sets" || date >= "2026-09-11") &&
+    (date >= EXTRA_GAMES_START || !["dosun", "nurikabe", "fivecells"].includes(kind))
+  );
 }
-export type Kind = typeof KINDS[number];
 export const META: Record<
   Kind,
   {
@@ -155,6 +161,22 @@ export const META: Record<
     ],
     color: 0xa46548,
     pale: 0xf4e7db,
+  },
+  sets: {
+    name: "Sets",
+    category: "SAME & DIFFERENT",
+    description: "Eight cards. Three connections.",
+    rules: [
+      "Find all three different sets among the eight cards. Each set contains three cards.",
+      "For each feature—number, shape, color and fill—the three cards must be all the same or all different.",
+      "Two matching and one different is not allowed for any feature.",
+      "Tap three cards to check a set. Tap a selected card again to deselect it.",
+      "Cards stay on the board and can belong to more than one set. Finding the same set again does not count.",
+      "There are exactly three sets, and every card belongs to at least one. Find all three to finish.",
+      "Keyboard: 1–8 select cards, or use arrows and Space. Backspace clears your selection.",
+    ],
+    color: 0x81738b,
+    pale: 0xeee8ed,
   },
   mosaic: {
     name: "Mosaic",
@@ -790,7 +812,7 @@ export function generate(kind: Kind, seed: string): Puzzle {
   const rng = new Random(key),
     size = kind === "sudoku" || kind === "killer"
       ? 9
-      : kind === "atoms"
+      : kind === "atoms" || kind === "sets"
       ? 4
       : kind === "pipes" || kind === "snap" || kind === "nurikabe" || kind === "fivecells"
       ? 5
@@ -819,6 +841,9 @@ export function generate(kind: Kind, seed: string): Puzzle {
     case "mambo":
       mambo(p, rng);
       break;
+    case "sets":
+      generateSets(p, rng);
+      break;
     case "mosaic":
       mosaic(p, rng);
       break;
@@ -826,7 +851,8 @@ export function generate(kind: Kind, seed: string): Puzzle {
       generateDosun(p, rng);
       break;
     case "nurikabe":
-      generateNurikabe(p, rng);
+      // Date-version this change so older daily boards and their saved entries stay intact.
+      generateNurikabe(p, rng, /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-11");
       break;
     case "fivecells":
       generateFiveCells(p, rng);
@@ -857,6 +883,9 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
     p.initial.some((v, i) => v && a[i] !== v)
   ) return false;
   switch (p.kind) {
+    case "sets":
+      return a.length === 3 && a.every((v) => v === 1) && p.clues.length === 8 &&
+        new Set(p.clues).size === 8 && findSets(p.clues).length === 3;
     case "sudoku":
     case "killer":
       return a.every((v) => Number.isInteger(v) && v >= 1 && v <= 9) &&

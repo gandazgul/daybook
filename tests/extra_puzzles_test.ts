@@ -1,7 +1,8 @@
-import { generate, isSolved, KINDS, kindsForDate } from "../src/puzzles.ts";
+import { generate, isSolved, KINDS, kindsForDate, Random } from "../src/puzzles.ts";
 import {
   fiveEdges,
   fiveRegions,
+  generateNurikabe,
   solveDosun,
   solveFiveCells,
   solveNurikabe,
@@ -104,8 +105,8 @@ Deno.test("new games persist marks/borders and preserve old calendar completion"
       data.set(k, v);
     },
   });
-  assert(kindsForDate("2026-09-08").length === 9);
-  assert(kindsForDate("2026-09-09").length === 12);
+  assert(kindsForDate("2026-09-08").length === 8);
+  assert(kindsForDate("2026-09-09").length === 11);
   assert(KINDS.length === 12);
   for (const kind of kindsForDate("2026-09-08")) {
     const p = generate(kind, "2026-09-08"), progress = store.load(p);
@@ -113,7 +114,7 @@ Deno.test("new games persist marks/borders and preserve old calendar completion"
     progress.completed = true;
     store.save(p.seed, kind, progress);
   }
-  assert(store.count("2026-09-08") === 9);
+  assert(store.count("2026-09-08") === 8);
   assert(!["dosun", "nurikabe", "fivecells"].includes(featured("2026-09-08")));
   for (const kind of ["dosun", "nurikabe", "fivecells"] as const) {
     const p = generate(kind, "2026-09-09"), progress = store.load(p);
@@ -130,4 +131,49 @@ Deno.test("new games persist marks/borders and preserve old calendar completion"
     assert(fresh.load(p).completed && fresh.load(p).elapsed === 127, `${kind} completion reload`);
   }
   assert(data.has(STORAGE_KEY));
+});
+
+Deno.test("New Nurikabe daily and practice boards always include a larger island and one solution", () => {
+  for (let i = 0; i < 365; i++) {
+    const date = new Date(Date.UTC(2026, 8, 11 + i)).toISOString().slice(0, 10);
+    for (const seed of [date, `practice:nurikabe-variety-${i}`]) {
+      const p = generate("nurikabe", seed);
+      assert(p.clues.some((v) => v > 1), `${seed}: all islands are 1`);
+      assert(validNurikabe(p.clues, p.solution, p.size), `${seed}: invalid solution`);
+      assert(solveNurikabe(p.clues, p.size).count === 1, `${seed}: not unique`);
+      assert(!isSolved(p, p.initial), `${seed}: starts solved`);
+    }
+  }
+});
+Deno.test("Nurikabe fallback has larger islands and a unique solution in every orientation", () => {
+  for (let orientation = 0; orientation < 8; orientation++) {
+    class FallbackRandom extends Random {
+      override shuffle<T>(_items: T[]): T[] { return []; }
+      override int(n: number) { return n === 4 ? orientation % 4 : n === 2 ? Math.floor(orientation / 4) : 0; }
+    }
+    const p = structuredClone(generate("nurikabe", "fallback-template"));
+    generateNurikabe(p, new FallbackRandom("force-empty-frontier"));
+    assert(p.clues.includes(2) && p.clues.includes(3));
+    assert(validNurikabe(p.clues, p.solution, p.size));
+    assert(solveNurikabe(p.clues, p.size).count === 1);
+    assert(!isSolved(p, p.initial));
+  }
+});
+Deno.test("Nurikabe preserves published daily clues and saves across the variety change", () => {
+  const fixtures = [
+    ["2026-09-09", [0,0,0,0,1,0,2,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,4,0]],
+    ["2026-09-10", [0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,1]],
+    ["2026-09-11", [0,0,4,0,1,0,0,0,0,0,0,0,2,0,1,0,0,0,0,0,0,0,3,0,1]],
+  ] as const;
+  const disk = new Map<string, string>();
+  const storage = { getItem: (k: string) => disk.get(k) ?? null, setItem: (k: string, v: string) => { disk.set(k, v); } };
+  for (const [seed, clues] of fixtures) {
+    const p = generate("nurikabe", seed);
+    assert(JSON.stringify(p.clues) === JSON.stringify(clues), `${seed}: published board changed`);
+    const store = new ProgressStore(storage), progress = store.load(p);
+    progress.values = [...p.solution]; progress.completed = true; progress.elapsed = 123;
+    store.save(seed, "nurikabe", progress);
+    const restored = new ProgressStore(storage).load(p);
+    assert(restored.completed && restored.elapsed === 123);
+  }
 });

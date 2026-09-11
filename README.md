@@ -22,22 +22,37 @@ illustrations, menus, and controls are drawn in the game engine.
 - **No account, points, or streaks:** solving time is recorded, with no leaderboard, sounds, or
   cross-device profile.
 
+Playfields sit directly on the background without an outer rounded container. Both Sudokus use
+nearly full-width phone boards, larger digits, and 2px gaps between cells and 4px gaps between
+3 × 3 boxes, with no solid grid lines or outer frame. Killer retains its larger cage totals
+and clear dashed cage outlines.
+Phaser renders at device pixel density (up to 3×) for clear text and lines on phone screens.
+
 ## The games
 
 | Game            | Goal                                                                                                                     | Board |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----- |
-| Sudoku          | Place 1–9 once in each row, column, and 3 × 3 box                                                                        | 9 × 9 |
 | Pipes           | Rotate pipes to connect every tile and endpoint to the water source without leaks                                        | 5 × 5 |
 | Atoms           | Match each atom's required bonds using one or two lines between adjacent atoms; connect the whole network                | 4 × 4 |
-| Killer Sudoku   | Follow Sudoku rules and satisfy cage totals, without repeating digits inside a cage                                      | 9 × 9 |
 | Regional Queens | Place one queen per row, column, and region; queens cannot touch, even diagonally                                        | 6 × 6 |
 | Shikaku         | Cover the grid with rectangles, each containing one clue equal to its area                                               | 6 × 6 |
 | Number Path     | Visit numbered dots in order along one path that fills every square exactly once                                         | 5 × 5 |
 | Balance         | Place three of each shape per row and column, with no three consecutive identical shapes; satisfy = and × clues          | 6 × 6 |
-| Mosaic          | Shade squares so every clue matches its surrounding 3 × 3 area, including its own square                                 | 6 × 6 |
+| Sets            | Find exactly three different sets: each feature must be all the same or all different across three cards                  | 8 cards |
 | Dosun-Fuwari    | Place one supported balloon and one supported weight in each region                                                      | 6 × 6 |
 | Nurikabe        | Make numbered islands of exact sizes, with one clue each, surrounded by connected water with no solid 2 × 2 water blocks | 5 × 5 |
 | Five Cells      | Partition the grid into connected groups of five; clues count bordering sides, including the outer frame                 | 5 × 5 |
+| Sudoku          | Place 1–9 once in each row, column, and 3 × 3 box                                                                        | 9 × 9 |
+| Killer Sudoku   | Follow Sudoku rules and satisfy cage totals, without repeating digits inside a cage                                      | 9 × 9 |
+
+Sets uses muted sage, clay and lavender cards with three shapes, counts and fills. Each generated
+board is exhaustively checked to contain exactly three sets among its eight unique cards; every
+card participates, and one card is shared by two sets. Found cards stay available. Tap a found
+trio below the board to review it. Smart hints explain the four feature checks; reveals record
+one new set after preview.
+
+Mosaic is temporarily hidden: its collection entry is commented out, while its code, tutorials,
+hints and saved progress remain intact. It does not count toward daily completion.
 
 Completion is checked against each game's rules. Sudoku, Killer Sudoku, Regional Queens, Shikaku,
 Balance, Mosaic, Dosun-Fuwari, Nurikabe, and Five Cells have solver-checked unique solutions. Pipes,
@@ -48,6 +63,10 @@ diagonal. Balance does not require different rows to have unique patterns. Atoms
 orthogonally adjacent grid cells. Mosaic is a gentler Fill-a-Pix variant: numbered squares start
 with their correct shading locked; empty marks on other squares are optional aids and unshaded
 squares can stay blank. Unused Dosun-Fuwari squares can stay blank.
+
+New Nurikabe daily boards from September 11, 2026, and all new practice boards include at least
+one island larger than 1, including the generation fallback. Earlier daily boards remain unchanged
+to preserve saved progress. All new boards still have a solver-checked unique solution.
 
 The additional rules references are Nikoli's
 [Dosun-Fuwari](https://www.nikoli.co.jp/en/puzzles/dosun_fuwari/),
@@ -133,8 +152,10 @@ five-square groups. They do not yet constitute a complete logical solver for eve
 - Each **local calendar date** deterministically seeds one puzzle of each kind. The same date and
   generator version produce the same puzzles on every device.
 - Dosun-Fuwari, Nurikabe, and Five Cells join daily collections from **September 9, 2026**. Earlier
-  dates retain nine games and their existing completion status. All twelve are available in
-  practice. Existing generators and saved puzzle identifiers are unchanged.
+  dates now show eight active games, with Mosaic hidden. September 9–10 show eleven; Sets joins
+  the daily collection on September 11, 2026. All twelve active games are available in practice.
+  Hidden Mosaic never counts toward the daily total. Existing saved puzzle identifiers are unchanged.
+- Sudoku and Killer Sudoku appear last in daily and practice collections, and in the next-puzzle order.
 - The featured game rotates through the kinds available on that date. Puzzles generate on demand, so
   an unattended server needs no cron job.
 - The calendar allows past dates and prevents future-day play. A day is complete when all games
@@ -183,7 +204,9 @@ reduced-motion setting, this becomes a stationary highlight.
 - **Regional Queens:** click or tap to mark a large X, or drag across cells to paint Xs.
   Double-click or double-tap to place a queen. Tap a mark to clear it. Dragging preserves queens and
   is undone as one action. With a keyboard, arrows select and Space cycles the marks.
-- **Balance / Mosaic:** tap to cycle an editable cell’s three states. Mosaic’s numbered squares have
+- **Sets:** tap three cards to check them, tap again to deselect. Find three distinct trios; cards
+  can be reused. Keys 1–8 toggle cards, arrows move focus, Space selects, Backspace clears selection.
+- **Balance / Mosaic (hidden):** tap to cycle an editable cell’s three states. Mosaic’s numbered squares have
   fixed shading; only the unnumbered squares are editable. It finishes when shaded squares satisfy
   every clue; empty marks are optional. Mosaic clues turn red for excess shading, or for too little
   shading once their whole neighborhood is decided. Untouched areas stay neutral; edges count only
@@ -280,7 +303,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **39 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **48 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,

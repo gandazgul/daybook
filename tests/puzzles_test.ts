@@ -46,14 +46,14 @@ Deno.test("all generators produce playable, deterministic, solvable daily puzzle
 Deno.test("consecutive days and practice produce fresh content", () => {
   for (const kind of KINDS) {
     assert(
-      JSON.stringify(generate(kind, "2026-09-08").solution) !==
-        JSON.stringify(generate(kind, "2026-09-09").solution),
+      JSON.stringify(kind === "sets" ? generate(kind, "2026-09-08").clues : generate(kind, "2026-09-08").solution) !==
+        JSON.stringify(kind === "sets" ? generate(kind, "2026-09-09").clues : generate(kind, "2026-09-09").solution),
       `${kind} repeated`,
     );
     assert(generate(kind, "practice:one").seed === "practice:one");
   }
   assert(
-    new Set(Array.from({ length: KINDS.length }, (_, i) => featured(`2026-09-${10 + i}`))).size ===
+    new Set(Array.from({ length: KINDS.length }, (_, i) => featured(`2026-09-${11 + i}`))).size ===
       KINDS.length,
   );
 });

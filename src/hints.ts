@@ -1,3 +1,4 @@
+import { findSets, setDescription } from "./sets.ts";
 import { fiveCellOptions } from "./extra-puzzles.ts";
 import { adjacent, direction, isSolved, type Puzzle, rectangle, rotate } from "./puzzles.ts";
 
@@ -50,6 +51,18 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
   const col = (i: number) => all.filter((j) => i % n === j % n);
   const put = (i: number, v: number, why: string, cells = [i]) => move(a, i, v, why, cells);
   switch (p.kind) {
+    case "sets": {
+      const triples = findSets(p.clues), index = triples.findIndex((_, i) => !a[i]);
+      if (index < 0) return { title: "Already complete", text: "All three sets have been found.", cells: range(8) };
+      const cells = triples[index], values = [...a];
+      values[index] = 1;
+      return {
+        title: "Compare these three cards",
+        text: `Cards ${cells.map((i) => i + 1).join(", ")} form a set: ${setDescription(cells.map((i) => p.clues[i]))}. Every feature passes the same-or-different rule. Apply to record this set.`,
+        cells,
+        values,
+      };
+    }
     case "sudoku":
     case "killer": {
       const units = [
@@ -631,6 +644,10 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
 /** Reveal one step toward one generated solution; never present this as a logical proof. */
 export function revealHint(p: Puzzle, a: number[]): Hint {
   const n = p.size;
+  if (p.kind === "sets") {
+    const hint = smartHint(p, a);
+    return hint.values ? { ...hint, title: "Reveal one set", text: `The highlighted cards form one of the three sets. Apply to record it. Cards stay available for other sets.` } : hint;
+  }
   if (isSolved(p, a)) {
     return {
       title: "Already complete",

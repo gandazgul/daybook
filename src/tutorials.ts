@@ -1,3 +1,4 @@
+import { EXAMPLE_CARDS, cardAttributes } from "./sets.ts";
 import finishedBoards from "./tutorial-boards.json" with { type: "json" };
 import type { Kind, Puzzle } from "./puzzles.ts";
 import type { StorageLike } from "./storage.ts";
@@ -59,6 +60,7 @@ const finishedGoals: Record<Exclude<Kind, "nurikabe">, string> = {
     "One continuous path visits every square exactly once, passing through the numbered dots in order from 1 to the last number.",
   mambo:
     "Every row and column has three circles and three diamonds, with no three identical symbols in a row. Every = or × clue is satisfied.",
+  sets: "All three sets have been found. The eight cards stay visible, including the card shared by two sets.",
   mosaic:
     "Each clue matches the shaded squares in its 3 × 3 area, including itself. Clue squares are fixed; other unshaded squares may stay blank.",
   dosun:
@@ -68,6 +70,35 @@ const finishedGoals: Record<Exclude<Kind, "nurikabe">, string> = {
 };
 
 export function tutorialSteps(p: VisiblePuzzle): TutorialStep[] {
+  if (p.kind === "sets") {
+    const board: VisiblePuzzle & { values: number[] } = {
+      kind: "sets", size: 4, initial: [0, 0, 0], clues: [...EXAMPLE_CARDS],
+      regions: [], cages: [], links: [], edges: [], values: [1, 1, 1],
+    };
+    const cards = [0, 3, 4], all = Array.from({ length: 8 }, (_, i) => i);
+    const labels = [
+      ["one symbol", "two symbols", "three symbols"],
+      ["oval", "diamond", "wave"],
+      ["sage", "clay", "lavender"],
+      ["outline", "striped", "solid"],
+    ];
+    return [{
+      title: "A finished puzzle", finished: true, boardExample: board, cells: all,
+      text: "All three sets are recorded below the cards. Each set uses three cards. Cards stay in place: card 8 belongs to two sets in this separate example.",
+    }, ...["Number", "Shape", "Color", "Fill"].map((feature, axis): TutorialStep => {
+      const values = cards.map((i) => cardAttributes(board.clues[i])[axis]);
+      return {
+        title: `${feature}: same or different`, boardExample: { ...board, values: [1, 0, 0] }, cells: cards,
+        text: `Compare cards 1, 4 and 5. Their ${feature.toLowerCase()} is ${new Set(values).size === 1 ? `the same on all three (${labels[axis][values[0]]})` : `different on all three (${values.map((v) => labels[axis][v]).join(", ")})`}. This passes. Two the same and one different would fail.`,
+      };
+    }), {
+      title: "Every feature must pass", boardExample: { ...board, values: [1, 0, 0] }, cells: cards,
+      text: "These three cards pass all four checks, so they form a set. One feature can be all the same while another is all different. If even one feature fails, the group is not a set.",
+    }, {
+      title: "Find three different sets", cells: all,
+      text: "This is your board. Tap three cards to check them; tap a selected card to deselect it. Cards can be reused, but the same trio only counts once. There are exactly three sets. Find all three to finish.",
+    }];
+  }
   const steps = ruleSteps(p);
   if (p.kind === "nurikabe") {
     steps[0].finished = true;
@@ -151,6 +182,8 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
     ),
   ];
   switch (p.kind) {
+    case "sets":
+      return [];
     case "sudoku":
       return [...sudoku, ...sudokuControls];
     case "killer": {

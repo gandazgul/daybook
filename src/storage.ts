@@ -103,6 +103,7 @@ export class ProgressStore {
         return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 3);
       case "nurikabe":
         return a.every((v, i) => v >= 0 && v <= 2 && (!p.clues[i] || v === 2));
+      case "sets":
       case "fivecells":
         return a.every((v) => v === 0 || v === 1);
       case "shikaku":

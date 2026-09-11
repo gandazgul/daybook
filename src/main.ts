@@ -1,3 +1,4 @@
+import { cardAttributes, cardDescription, findSets, SET_ATTRIBUTES } from "./sets.ts";
 import Phaser from "phaser";
 import "./style.css";
 import { type Hint, revealHint, smartHint } from "./hints.ts";
@@ -52,6 +53,8 @@ const DARK = {
   white: 0x242b27,
   error: 0xd9977f,
 };
+// Render at device density while keeping layout and game logic in CSS pixels.
+const RENDER_SCALE = Math.min(3, Math.max(1, globalThis.devicePixelRatio || 1));
 const css = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const blend = (a: number, b: number, t: number) => {
   const r = (s: number) => Math.round(((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t);
@@ -89,6 +92,7 @@ class Daybook extends Phaser.Scene {
   progress?: Progress;
   selected = -1;
   selectedCells = new Set<number>();
+  reviewSet = -1;
   notes = false;
   history: { values: number[]; notes: Record<number, number[]> }[] = [];
   redoHistory: { values: number[]; notes: Record<number, number[]> }[] = [];
@@ -119,10 +123,10 @@ class Daybook extends Phaser.Scene {
     return this.night ? DARK : LIGHT;
   }
   get W() {
-    return this.scale.width;
+    return this.scale.width / RENDER_SCALE;
   }
   get H() {
-    return this.scale.height;
+    return this.scale.height / RENDER_SCALE;
   }
   get mobile() {
     return this.W < 720;
@@ -157,16 +161,17 @@ class Daybook extends Phaser.Scene {
       }
     });
     startPwa();
+    this.cameras.main.setOrigin(0, 0).setZoom(RENDER_SCALE);
     this.scale.on("resize", () => {
+      this.cameras.main.setOrigin(0, 0).setZoom(RENDER_SCALE);
       this.scrollY = 0;
       this.draw();
     });
     // Respond to the safe-area container itself, including rotation while the game is paused.
     const resize = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0 && (this.W !== width || this.H !== height)) {
-        this.scale.getParentBounds();
-        this.scale.refresh();
+      if (width > 0 && height > 0 && (this.scale.width !== Math.round(width * RENDER_SCALE) || this.scale.height !== Math.round(height * RENDER_SCALE))) {
+        this.scale.resize(Math.round(width * RENDER_SCALE), Math.round(height * RENDER_SCALE));
       }
     });
     resize.observe(document.getElementById("game")!);
@@ -179,7 +184,7 @@ class Daybook extends Phaser.Scene {
     });
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.boardPointerId >= 0 && p.id !== this.boardPointerId) return;
-      this.pointerY = p.y;
+      this.pointerY = (p.y / RENDER_SCALE);
       this.pointerDragged = false;
       this.pointerStart = -1;
       if (this.page !== "game" || this.modal || this.progress?.completed) {
@@ -199,7 +204,7 @@ class Daybook extends Phaser.Scene {
       if (this.puzzle!.kind === "fivecells") {
         this.borderVisited.clear();
         this.borderLastPoint = undefined;
-        this.paintFiveBorders(p.x, p.y);
+        this.paintFiveBorders((p.x / RENDER_SCALE), (p.y / RENDER_SCALE));
       } else if (this.puzzle!.kind === "queens") {
         const edit = this.queensInput.begin(i, this.progress!.values, performance.now());
         if (!edit.mergeUndo) this.snapshot();
@@ -207,14 +212,14 @@ class Daybook extends Phaser.Scene {
         edit.marks.forEach(({ index, value }) => this.progress!.values[index] = value);
         this.changed();
       } else if (this.puzzle!.kind !== "shikaku") this.actCell(i, p);
-      this.touchFeedback(p.x, p.y, Math.min(24, this.board.cell * .32));
+      this.touchFeedback((p.x / RENDER_SCALE), (p.y / RENDER_SCALE), Math.min(24, this.board.cell * .32));
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (!p.isDown || (this.modal && this.modal !== "tutorial" && this.modal !== "hint") || (this.boardPointerId >= 0 && p.id !== this.boardPointerId)) {
         return;
       }
       if (this.page !== "game" || this.pointerStart < 0) {
-        const dy = this.pointerY - p.y;
+        const dy = this.pointerY - (p.y / RENDER_SCALE);
         if (Math.abs(dy) > 4 || this.pointerDragged) {
           this.pointerDragged = true;
           this.scrollY = Phaser.Math.Clamp(
@@ -222,7 +227,7 @@ class Daybook extends Phaser.Scene {
             0,
             Math.max(0, this.contentHeight - this.H + 20),
           );
-          this.pointerY = p.y;
+          this.pointerY = (p.y / RENDER_SCALE);
           this.touchPulses = [];
           this.draw();
         }
@@ -230,7 +235,7 @@ class Daybook extends Phaser.Scene {
       }
       if (this.puzzle?.kind === "fivecells" && !this.progress?.completed) {
         this.pointerDragged = true;
-        this.paintFiveBorders(p.x, p.y);
+        this.paintFiveBorders((p.x / RENDER_SCALE), (p.y / RENDER_SCALE));
         return;
       }
       const i = this.cellAt(p);
@@ -284,7 +289,7 @@ class Daybook extends Phaser.Scene {
         if (this.puzzle?.kind === "shikaku" && i >= 0 && this.pointerStart >= 0) {
           if (i !== this.pointerStart) this.placeRectangle(this.pointerStart, i);
           else this.actCell(i, p);
-          this.touchFeedback(p.x, p.y, Math.min(24, this.board.cell * .32));
+          this.touchFeedback((p.x / RENDER_SCALE), (p.y / RENDER_SCALE), Math.min(24, this.board.cell * .32));
         }
       }
       this.pointerStart = this.boardPointerId = -1;
@@ -421,7 +426,7 @@ class Daybook extends Phaser.Scene {
       color: css(color),
       lineSpacing: 6,
       ...(width ? { wordWrap: { width, useAdvancedWrap: true } } : {}),
-    }).setResolution(Math.min(devicePixelRatio || 1, 2));
+    }).setResolution(RENDER_SCALE);
   }
   line(x1: number, y1: number, x2: number, y2: number, color = this.C.line, width = 1) {
     this.add.graphics().lineStyle(width, color).lineBetween(x1, y1, x2, y2);
@@ -465,7 +470,7 @@ class Daybook extends Phaser.Scene {
         this.focused = -1;
         this.queensInput.reset();
         action();
-        this.touchFeedback(pointer.x, pointer.y);
+        this.touchFeedback((pointer.x / RENDER_SCALE), (pointer.y / RENDER_SCALE));
       }
     });
     if (hover) {
@@ -520,13 +525,16 @@ class Daybook extends Phaser.Scene {
     this.notice = "";
     this.draw();
   }
+  logo(x: number, y: number) {
+    const g = this.add.graphics().fillStyle(this.C.accent);
+    g.fillRoundedRect(x, y, 9, 9, 2);
+    g.fillRoundedRect(x + 13, y, 9, 9, 2);
+    g.fillRoundedRect(x, y + 13, 9, 9, 2);
+    g.fillCircle(x + 17.5, y + 17.5, 4.5);
+  }
   header() {
     const m = this.margin, y = 32 - this.scrollY, c = this.C;
-    const g = this.add.graphics().fillStyle(c.accent);
-    g.fillRoundedRect(m, y + 3, 9, 9, 2);
-    g.fillRoundedRect(m + 13, y + 3, 9, 9, 2);
-    g.fillRoundedRect(m, y + 16, 9, 9, 2);
-    g.fillCircle(m + 17.5, y + 20.5, 4.5);
+    this.logo(m, y + 3);
     this.text(m + 35, y - 3, "daybook", 29, c.ink, "Georgia");
     this.hit(m, y - 7, 165, 45, "Daybook home", () => {
       this.selectedDate = this.today;
@@ -716,10 +724,10 @@ class Daybook extends Phaser.Scene {
         cw,
         ch,
         c.panel,
-        !practice && kind === pick ? blend(c.accent, c.line, .5) : c.line,
-        12,
+        undefined,
+        0,
       );
-      this.box(x + 14, y + 14, cw - 28, 80, this.pale(kind), undefined, 7);
+      this.box(x + 14, y + 14, cw - 28, 80, this.pale(kind), undefined, 0);
       this.miniature(kind, x + cw / 2, y + 53, 64);
       if (!practice && kind === pick) this.circle(x + cw - 24, y + 24, 4, this.tint(kind));
       const fs = this.mobile ? 18 : 22;
@@ -825,7 +833,12 @@ class Daybook extends Phaser.Scene {
       g = this.add.graphics().lineStyle(2, color),
       x = cx - s / 2,
       y = cy - s / 2;
-    if (kind === "sudoku" || kind === "killer") {
+    if (kind === "sets") {
+      for (let i = 0; i < 3; i++) {
+        this.box(x + i * s * .28, y + 5 + i * 4, s * .4, s * .65, this.C.panel, color, 4);
+        this.circle(x + i * s * .28 + s * .2, y + 5 + i * 4 + s * .32, s * .06, color);
+      }
+    } else if (kind === "sudoku" || kind === "killer") {
       g.strokeRoundedRect(x + 5, y + 2, s - 10, s - 3, 3);
       for (let k = 1; k < 3; k++) {
         g.lineBetween(x + 5 + k * (s - 10) / 3, y + 2, x + 5 + k * (s - 10) / 3, y + s - 1);
@@ -1111,6 +1124,7 @@ class Daybook extends Phaser.Scene {
     this.pointerStart = this.boardPointerId = -1;
     this.persist();
     this.notice = "";
+    this.reviewSet = -1;
     try {
       this.puzzle = generate(kind, seed);
       this.progress = store.load(this.puzzle);
@@ -1274,6 +1288,13 @@ class Daybook extends Phaser.Scene {
     const focus = new Set(step.cells), s = this.board.cell;
     const overlay = this.add.graphics().setName("tutorial-highlight");
     const highlight = step.example?.invalid ? c.error : c.accent;
+    if (p.kind === "sets") {
+      for (let i = 0; i < 8; i++) {
+        const r = this.setsCardRect(i);
+        if (!focus.has(i)) overlay.fillStyle(c.bg, .68).fillRoundedRect(r.x, r.y, r.w, r.h, 5);
+        else overlay.lineStyle(2.5, highlight).strokeRoundedRect(r.x, r.y, r.w, r.h, 5);
+      }
+    } else {
     for (let i = 0; i < n ** 2; i++) {
       const x = bx + i % n * s, y = by + Math.floor(i / n) * s;
       if (!focus.has(i)) overlay.fillStyle(c.bg, .68).fillRect(x, y, s, s);
@@ -1286,6 +1307,7 @@ class Daybook extends Phaser.Scene {
       if (!focus.has(i + n)) overlay.lineBetween(x, y + s, x + s, y + s);
       if (i % n === 0 || !focus.has(i - 1)) overlay.lineBetween(x, y, x, y + s);
       if (i % n === n - 1 || !focus.has(i + 1)) overlay.lineBetween(x + s, y, x + s, y + s);
+    }
     }
     for (const [x1, y1, x2, y2] of step.lines || []) {
       overlay.lineStyle(4, c.accent, .8).lineBetween(bx + x1 * s, by + y1 * s, bx + x2 * s, by + y2 * s);
@@ -1309,7 +1331,7 @@ class Daybook extends Phaser.Scene {
         this.text(x + 17, y - 2, label, 12, c.muted);
       });
     }
-    this.box(cardX, cardY, cardWidth, height, c.panel, c.line, 12);
+    this.box(cardX, cardY, cardWidth, height, c.panel, undefined, 0);
     title.setPosition(cardX + pad, cardY + pad);
     body.setPosition(cardX + pad, cardY + pad + title.height + 12);
     this.children.bringToTop(title);
@@ -1336,8 +1358,7 @@ class Daybook extends Phaser.Scene {
     }
   }
   drawNurikabeExample(rows: string[]) {
-    const { x, y, cell: s, n } = this.board, c = this.C;
-    this.box(x - 7, y - 7, n * s + 14, n * s + 14, c.panel, c.line, 9);
+    const { x, y, cell: s } = this.board, c = this.C;
     rows.forEach((row, r) => [...row].forEach((value, col) => {
       const xx = x + col * s, yy = y + r * s;
       this.box(xx, yy, s, s, c.panel, c.line, 0);
@@ -1368,7 +1389,10 @@ class Daybook extends Phaser.Scene {
       "Back to collection",
       () => this.go(practice ? "practice" : "today"),
     );
-    this.text(this.W / 2, top + 10, "daybook", 25, c.ink, "Georgia").setOrigin(.5, 0);
+    const wordmark = this.text(0, backY, "daybook", 25, c.ink, "Georgia").setOrigin(0, .5);
+    const brandX = (this.W - wordmark.width - 30) / 2;
+    this.logo(brandX, backY - 11);
+    wordmark.setX(brandX + 30);
     this.button(this.W - m - 44, top + 1, 44, 40, "☼", () => {
       this.modal = "settings";
       this.draw();
@@ -1390,8 +1414,11 @@ class Daybook extends Phaser.Scene {
     const heading = this.text(m, titleY + 27, meta.name, headingSize, c.ink, "Georgia");
     if (heading.width > w) heading.setFontSize(Math.floor(headingSize * w / heading.width));
     if (!compact) this.text(m, titleY + 84, meta.description, 15, c.muted);
-    const size = Math.min(compact ? w : 492, Math.max(225, this.H - (compact ? 344 : 370)));
-    const bx = compact ? m + (w - size) / 2 : m + (Math.min(w, 690) - size) / 2,
+    const available = this.mobile && (p.kind === "sudoku" || p.kind === "killer")
+      ? this.W - 16
+      : Math.min(compact ? w : 492, Math.max(225, this.H - (compact ? 344 : 370)));
+    const size = p.kind === "sudoku" || p.kind === "killer" ? Math.floor(available / 9) * 9 : available;
+    const bx = Math.round(compact ? m + (w - size) / 2 : m + (Math.min(w, 690) - size) / 2),
       by = compact ? 205 : 246;
     this.board = { x: bx, y: by, cell: size / p.size, n: p.size };
     this.drawBoard();
@@ -1598,6 +1625,8 @@ class Daybook extends Phaser.Scene {
         return "Start at 1. Follow the numbers. Fill every square.";
       case "mambo":
         return "Tap for a circle, a diamond, or an empty square.";
+      case "sets":
+        return "Tap three cards. Each feature must be all the same or all different. Cards can be reused.";
       case "mosaic":
         return "Numbered squares are fixed. Tap other squares to shade; empty marks are optional.";
       case "dosun":
@@ -1641,6 +1670,93 @@ class Daybook extends Phaser.Scene {
       this.progress?.completed,
     );
   }
+  setsCardRect(i: number) {
+    const { x, y, cell: s } = this.board;
+    return { x: x + i % 4 * s + 3, y: y + Math.floor(i / 4) * s * 1.45 + 3, w: s - 6, h: s * 1.45 - 6 };
+  }
+  drawSetSymbol(x: number, y: number, width: number, height: number, shape: number, fill: number, color: number) {
+    const points = shape === 1
+      ? [{ x, y: y - height / 2 }, { x: x + width / 2, y }, { x, y: y + height / 2 }, { x: x - width / 2, y }]
+      : Array.from({ length: 48 }, (_, i) => {
+        const angle = i * Math.PI * 2 / 48;
+        return { x: x + Math.cos(angle) * width / 2, y: y + Math.sin(angle) * height / 2 + (shape === 2 ? Math.sin(Math.PI * Math.cos(angle)) * height * .25 : 0) };
+      });
+    const g = this.add.graphics().lineStyle(Math.max(1.4, width * .055), color);
+    if (fill === 2) g.fillStyle(color).fillPoints(points, true);
+    if (fill === 1) {
+      // Clip vertical hatching mathematically to the geometric outline; no bitmap assets.
+      for (let xx = x - width / 2 + 3; xx < x + width / 2; xx += Math.max(3, width / 7)) {
+        const crossings: number[] = [];
+        points.forEach((a, i) => {
+          const b = points[(i + 1) % points.length];
+          if ((a.x <= xx && b.x > xx) || (b.x <= xx && a.x > xx)) crossings.push(a.y + (xx - a.x) * (b.y - a.y) / (b.x - a.x));
+        });
+        crossings.sort((a, b) => a - b);
+        for (let i = 0; i + 1 < crossings.length; i += 2) g.lineBetween(xx, crossings[i], xx, crossings[i + 1]);
+      }
+    }
+    g.strokePoints(points, true);
+  }
+  drawSets() {
+    const p = this.puzzle!, a = this.progress!.values, c = this.C, { x, y, cell: s } = this.board;
+    const triples = findSets(p.clues);
+    const review = this.modal ? [] : triples[this.reviewSet] || [];
+    const colors = this.night ? [0x9bad8c, 0xc09a84, 0xaaa0b8] : [0x5b7153, 0x9b6952, 0x81708f];
+    p.clues.forEach((card, i) => {
+      const r = this.setsCardRect(i), chosen = !this.modal && (this.selectedCells.has(i) || review.includes(i));
+      this.box(r.x, r.y, r.w, r.h, chosen ? c.soft : c.panel, chosen ? c.accent : c.line, 5);
+      if (chosen || (!this.modal && this.selected === i)) {
+        this.add.graphics().lineStyle(chosen ? 2.5 : 1, c.accent).strokeRoundedRect(r.x, r.y, r.w, r.h, 5);
+      }
+      this.text(r.x + 6, r.y + 4, String(i + 1), Math.max(10, s * .14), c.muted);
+      const [count, shape, color, fill] = cardAttributes(card);
+      for (let k = 0; k <= count; k++) {
+        this.drawSetSymbol(r.x + r.w / 2, r.y + r.h * .56 + (k - count / 2) * s * .31, s * .56, s * .23, shape, fill, colors[color]);
+      }
+    });
+    this.text(x + s * 2, y + s * 3.02, `${a.filter(Boolean).length} / 3 sets found`, Math.max(12, s * .18), c.ink).setOrigin(.5, 0);
+    triples.forEach((cells, i) => {
+      const bx = x + i * s * 4 / 3 + 3, by = y + s * 3.43, w = s * 4 / 3 - 6, h = s * .47;
+      this.box(bx, by, w, h, a[i] ? c.soft : c.panel, c.line, 4);
+      this.text(bx + w / 2, by + h / 2, a[i] ? cells.map((j) => j + 1).join(" · ") : "—", Math.max(12, s * .18), a[i] ? c.accent : c.muted).setOrigin(.5);
+      if (a[i] && !this.modal) this.hit(bx, by, w, h, `Review set: cards ${cells.map((j) => j + 1).join(", ")}`, () => {
+        this.reviewSet = this.reviewSet === i ? -1 : i;
+        this.selectedCells.clear(); this.draw();
+        this.announce(`Found set: cards ${cells.map((j) => j + 1).join(", ")}`);
+      });
+    });
+  }
+  selectSetCard(i: number) {
+    if (i < 0 || i >= 8) return;
+    this.reviewSet = -1;
+    this.notice = "";
+    if (this.selectedCells.has(i)) this.selectedCells.delete(i);
+    else {
+      if (this.selectedCells.size === 3) this.selectedCells.clear();
+      this.selectedCells.add(i);
+    }
+    if (this.selectedCells.size === 3) {
+      const cells = [...this.selectedCells].sort((a, b) => a - b);
+      const triples = findSets(this.puzzle!.clues);
+      const index = triples.findIndex((set) => set.every((cell, j) => cell === cells[j]));
+      if (index >= 0 && !this.progress!.values[index]) {
+        this.snapshot();
+        this.progress!.values[index] = 1;
+        this.selectedCells.clear(); this.reviewSet = index;
+        this.changed();
+        if (!this.progress!.completed) this.announce(`Set found. ${this.progress!.values.filter(Boolean).length} of 3. Cards remain available.`);
+        return;
+      }
+      if (index >= 0) this.notice = "You already found this set. Choose a different trio.";
+      else {
+        const attributes = cells.map((cell) => cardAttributes(this.puzzle!.clues[cell]));
+        const failures = SET_ATTRIBUTES.filter((_, axis) => new Set(attributes.map((card) => card[axis])).size === 2);
+        this.notice = `Not a set: ${failures.join(" and ")} must be all the same or all different. Tap a card to change your selection.`;
+      }
+      this.announce(this.notice);
+    } else this.announce(`Card ${i + 1}: ${cardDescription(this.puzzle!.clues[i])}. ${this.selectedCells.size} of 3 selected.`);
+    this.draw();
+  }
   drawBoard() {
     const p = this.puzzle!,
       state = this.progress!,
@@ -1649,7 +1765,10 @@ class Daybook extends Phaser.Scene {
       c = this.C,
       { x, y, cell: s } = this.board,
       size = s * n;
-    this.box(x - 7, y - 7, size + 14, size + 14, c.panel, c.line, 9);
+    if (p.kind === "sets") {
+      this.drawSets();
+      return;
+    }
     if (p.kind === "atoms") {
       this.drawAtoms();
       return;
@@ -1738,26 +1857,29 @@ class Daybook extends Phaser.Scene {
       } else if (p.kind === "sudoku" || p.kind === "killer") {
         if (a[i]) {
           const fixed = p.initial[i] > 0, conflict = this.numberConflict(i);
+          const cageClue = p.kind === "killer" && p.cages.some((cage) => cage.cells[0] === i);
           this.text(
-            xx + s / 2,
-            yy + s / 2 + (p.kind === "killer" ? 3 : 0),
+            xx + s * (cageClue ? .58 : .5),
+            yy + s * (p.kind === "killer" ? .57 : .5),
             String(a[i]),
-            s * .49,
+            s * .66,
             conflict ? c.error : fixed ? c.ink : c.accent,
           ).setOrigin(.5);
         } else {
+          const notePad = 5;
           const noteTop = p.kind === "killer" && p.cages.some((cage) => cage.cells[0] === i)
-            ? 3 + Math.max(12, s * .24)
-            : 0;
-          const noteHeight = s - noteTop;
+            ? 3 + Math.max(13, s * .3)
+            : notePad;
+          const noteHeight = s - noteTop - notePad;
           for (const v of state.notes[i] || []) {
-            this.text(
-              xx + ((v - 1) % 3 + .5) * s / 3,
+            const note = this.text(
+              xx + notePad + ((v - 1) % 3 + .5) * (s - notePad * 2) / 3,
               yy + noteTop + (Math.floor((v - 1) / 3) + .5) * noteHeight / 3,
               String(v),
               Math.min(s * .28, noteHeight * .4),
-              c.muted,
+              blend(c.muted, c.ink, .35),
             ).setOrigin(.5);
+            note.setScale(Math.min(1, noteHeight / 3 * .95 / note.height));
           }
         }
       } else if (p.kind === "queens") {
@@ -1789,17 +1911,22 @@ class Daybook extends Phaser.Scene {
         if (fixed) this.circle(xx + s - 8, yy + s - 8, 2.2, c.muted);
       }
     }
-    const grid = this.add.graphics().lineStyle(1, c.line);
+    const sudokuGrid = p.kind === "sudoku" || p.kind === "killer";
+    const grid = this.add.graphics().lineStyle(1, sudokuGrid ? blend(c.line, c.ink, .2) : c.line);
     for (let i = 0; i <= n; i++) {
+      // Both Sudokus use spacing for cells and boxes, without solid grid lines.
+      if (sudokuGrid) continue;
       grid.lineBetween(x + i * s, y, x + i * s, y + size);
       grid.lineBetween(x, y + i * s, x + size, y + i * s);
     }
-    if (p.kind === "sudoku" || p.kind === "killer") {
-      grid.lineStyle(2, blend(c.ink, c.line, .45));
-      for (let i = 0; i <= 9; i += 3) {
-        grid.lineBetween(x + i * s, y, x + i * s, y + size);
-        grid.lineBetween(x, y + i * s, x + size, y + i * s);
+    if (sudokuGrid) {
+      const gaps = this.add.graphics().fillStyle(c.bg);
+      for (let i = 1; i < n; i++) {
+        const gap = i % 3 === 0 ? 4 : 2;
+        gaps.fillRect(x + i * s - gap / 2, y, gap, size);
+        gaps.fillRect(x, y + i * s - gap / 2, size, gap);
       }
+      // Cages may span boxes; keep their dashed outlines continuous across the spacing.
       if (p.kind === "killer") this.drawCages();
     }
     if (p.kind === "queens" || p.kind === "dosun" || p.kind === "shikaku") {
@@ -1870,11 +1997,11 @@ class Daybook extends Phaser.Scene {
   drawCages() {
     const { x, y, cell: s, n } = this.board,
       p = this.puzzle!,
-      color = blend(this.C.muted, this.C.ink, .25),
-      g = this.add.graphics().lineStyle(1, color);
+      color = blend(this.C.muted, this.C.ink, .45),
+      g = this.add.graphics().lineStyle(1.25, color);
     const dashed = (x1: number, y1: number, x2: number, y2: number) => {
       const len = Math.hypot(x2 - x1, y2 - y1);
-      for (let d = 0; d < len; d += 6) {
+      for (let d = 0; d < len; d += 5) {
         const e = Math.min(d + 3, len);
         g.lineBetween(
           x1 + (x2 - x1) * d / len,
@@ -1888,24 +2015,28 @@ class Daybook extends Phaser.Scene {
       const set = new Set(cage.cells);
       for (const i of cage.cells) {
         const xx = x + i % n * s, yy = y + (i / n | 0) * s, pad = 3;
-        if (!set.has(i - n)) dashed(xx + pad, yy + pad, xx + s - pad, yy + pad);
-        if (i % n === n - 1 || !set.has(i + 1)) {
-          dashed(xx + s - pad, yy + pad, xx + s - pad, yy + s - pad);
-        }
-        if (!set.has(i + n)) dashed(xx + pad, yy + s - pad, xx + s - pad, yy + s - pad);
-        if (i % n === 0 || !set.has(i - 1)) dashed(xx + pad, yy + pad, xx + pad, yy + s - pad);
+        const top = !set.has(i - n), bottom = !set.has(i + n);
+        const left = i % n === 0 || !set.has(i - 1);
+        const right = i % n === n - 1 || !set.has(i + 1);
+        // Continue straight cage sides across cell joins instead of leaving a gap at each gridline.
+        const x1 = xx + (left ? pad : 0), x2 = xx + s - (right ? pad : 0);
+        const y1 = yy + (top ? pad : 0), y2 = yy + s - (bottom ? pad : 0);
+        if (top) dashed(x1, yy + pad, x2, yy + pad);
+        if (right) dashed(xx + s - pad, y1, xx + s - pad, y2);
+        if (bottom) dashed(x1, yy + s - pad, x2, yy + s - pad);
+        if (left) dashed(xx + pad, y1, xx + pad, y2);
       }
       const i = cage.cells[0], xx = x + i % n * s, yy = y + (i / n | 0) * s;
       this.box(
         xx + 4,
         yy + 3,
-        Math.max(15, s * .32),
-        Math.max(12, s * .24),
+        Math.max(16, s * .4),
+        Math.max(13, s * .3),
         this.C.panel,
         undefined,
         0,
       );
-      this.text(xx + 5, yy + 3, String(cage.sum), Math.max(9, s * .2), this.C.ink);
+      this.text(xx + 5, yy + 2, String(cage.sum), Math.max(10, s * .26), this.C.ink);
     }
   }
   drawPipes() {
@@ -2072,11 +2203,17 @@ class Daybook extends Phaser.Scene {
     }
   }
   cellAt(pointer: Phaser.Input.Pointer) {
+    if (this.puzzle?.kind === "sets") {
+      return Array.from({ length: 8 }, (_, i) => i).find((i) => {
+        const r = this.setsCardRect(i);
+        return (pointer.x / RENDER_SCALE) >= r.x && (pointer.x / RENDER_SCALE) < r.x + r.w && (pointer.y / RENDER_SCALE) >= r.y && (pointer.y / RENDER_SCALE) < r.y + r.h;
+      }) ?? -1;
+    }
     const { x, y, cell: s, n } = this.board;
-    if (pointer.x < x || pointer.y < y || pointer.x >= x + s * n || pointer.y >= y + s * n) {
+    if ((pointer.x / RENDER_SCALE) < x || (pointer.y / RENDER_SCALE) < y || (pointer.x / RENDER_SCALE) >= x + s * n || (pointer.y / RENDER_SCALE) >= y + s * n) {
       return -1;
     }
-    return Math.floor((pointer.y - y) / s) * n + Math.floor((pointer.x - x) / s);
+    return Math.floor(((pointer.y / RENDER_SCALE) - y) / s) * n + Math.floor(((pointer.x / RENDER_SCALE) - x) / s);
   }
   snapshot() {
     if (!this.progress) return;
@@ -2107,6 +2244,10 @@ class Daybook extends Phaser.Scene {
     if (!this.puzzle || !this.progress || this.progress.completed || this.modal) return;
     const p = this.puzzle, a = this.progress.values;
     this.selected = i;
+    if (p.kind === "sets") {
+      this.selectSetCard(i);
+      return;
+    }
     if (
       p.kind === "fivecells" || (p.kind === "dosun" && p.regions[i] < 0) ||
       (p.kind === "nurikabe" && p.clues[i] > 0) ||
@@ -2154,7 +2295,7 @@ class Daybook extends Phaser.Scene {
           ay = y + ((j / n | 0) + .5) * s,
           bx = x + (k % n + .5) * s,
           by = y + ((k / n | 0) + .5) * s;
-        const d = Math.hypot(pointer.x - (ax + bx) / 2, pointer.y - (ay + by) / 2);
+        const d = Math.hypot((pointer.x / RENDER_SCALE) - (ax + bx) / 2, (pointer.y / RENDER_SCALE) - (ay + by) / 2);
         if (d < dist) {
           dist = d;
           edge = e;
@@ -2279,6 +2420,7 @@ class Daybook extends Phaser.Scene {
     });
     Object.assign(this.progress, this.history.pop()!);
     this.rectStart = -1;
+    if (this.puzzle?.kind === "sets") { this.selectedCells.clear(); this.reviewSet = -1; }
     this.notice = "";
     this.persist();
     this.draw();
@@ -2349,6 +2491,19 @@ class Daybook extends Phaser.Scene {
       this.toggleNotes();
       this.draw();
       return;
+    }
+    if (this.puzzle.kind === "sets") {
+      if (/^[1-8]$/.test(e.key)) { this.actCell(Number(e.key) - 1); return; }
+      if (["Backspace", "Delete"].includes(e.key)) {
+        e.preventDefault(); this.selectedCells.clear(); this.reviewSet = -1; this.notice = ""; this.draw(); return;
+      }
+      const directions: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 };
+      if (e.key in directions) {
+        e.preventDefault();
+        const old = this.selected, next = old + directions[e.key];
+        this.selected = old < 0 ? 0 : next >= 0 && next < 8 && (Math.abs(directions[e.key]) === 4 || Math.floor(old / 4) === Math.floor(next / 4)) ? next : old;
+        this.draw(); this.announce(`Card ${this.selected + 1}: ${cardDescription(this.puzzle.clues[this.selected])}`); return;
+      }
     }
     if (/^[1-9]$/.test(e.key)) {
       this.enterNumber(Number(e.key));
@@ -2628,6 +2783,8 @@ class Daybook extends Phaser.Scene {
         this.snapshot();
         this.progress!.values = [...this.puzzle!.initial];
         this.progress!.notes = {};
+        this.selectedCells.clear();
+        this.reviewSet = -1;
         this.progress!.completed = false;
         delete this.progress!.completedAt;
         this.rectStart = -1;
@@ -2653,9 +2810,10 @@ new Phaser.Game({
   parent: "game",
   backgroundColor: LIGHT.bg,
   scale: {
-    mode: Phaser.Scale.RESIZE,
-    width: document.getElementById("game")!.clientWidth,
-    height: document.getElementById("game")!.clientHeight,
+    mode: Phaser.Scale.NONE,
+    zoom: 1 / RENDER_SCALE,
+    width: Math.round(document.getElementById("game")!.clientWidth * RENDER_SCALE),
+    height: Math.round(document.getElementById("game")!.clientHeight * RENDER_SCALE),
   },
   render: { antialias: true, roundPixels: false },
   input: { activePointers: 2 },

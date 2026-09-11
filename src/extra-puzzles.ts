@@ -263,7 +263,7 @@ export function solveNurikabe(clues: number[], n: number, limit = 2) {
   visit(numbered.map((_, i) => i), 0n, 0n);
   return { count, solution };
 }
-export function generateNurikabe(p: Puzzle, rng: Random) {
+export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false) {
   const n = p.size;
   for (let attempt = 0; attempt < 160; attempt++) {
     const values = Array(n * n).fill(2);
@@ -284,6 +284,7 @@ export function generateNurikabe(p: Puzzle, rng: Random) {
       values[cell] = 1;
       const islands = groups(values, n, (i) => values[i] === 2);
       if (islands.length < 4 || islands.length > 8 || islands.some((s) => s.length > 4)) continue;
+      if (!allowAllOnes && islands.every((island) => island.length === 1)) continue;
       const clues = Array(n * n).fill(0);
       islands.forEach((cells) => clues[rng.pick(cells)] = cells.length);
       if (solveNurikabe(clues, n).count !== 1) continue;
@@ -293,6 +294,25 @@ export function generateNurikabe(p: Puzzle, rng: Random) {
       return;
     }
   }
+  if (!allowAllOnes) {
+    // A solver-verified board from our own generator; symmetry preserves its unique solution.
+    // The 2- and 3-cell islands guarantee the fallback also satisfies the variety requirement.
+    if (n !== 5) throw new Error("Nurikabe fallback requires a 5 × 5 board");
+    const clues = [2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1];
+    const solution = [2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 2, 1, 2, 1, 2];
+    const turns = rng.int(4), mirror = rng.int(2);
+    p.clues = Array(n * n).fill(0);
+    p.solution = Array(n * n).fill(0);
+    clues.forEach((clue, i) => {
+      let row = Math.floor(i / n), col = mirror ? n - 1 - i % n : i % n;
+      for (let turn = 0; turn < turns; turn++) [row, col] = [col, n - 1 - row];
+      p.clues[row * n + col] = clue;
+      p.solution[row * n + col] = solution[i];
+    });
+    p.initial = p.clues.map((v) => v ? 2 : 0);
+    return;
+  }
+  // Preserve the original algorithm for already published daily seeds.
   const row = rng.int(2), col = rng.int(2);
   p.clues = Array.from(
     { length: n * n },
