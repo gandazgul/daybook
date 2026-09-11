@@ -1857,29 +1857,32 @@ class Daybook extends Phaser.Scene {
       } else if (p.kind === "sudoku" || p.kind === "killer") {
         if (a[i]) {
           const fixed = p.initial[i] > 0, conflict = this.numberConflict(i);
-          const cageClue = p.kind === "killer" && p.cages.some((cage) => cage.cells[0] === i);
           this.text(
-            xx + s * (cageClue ? .58 : .5),
-            yy + s * (p.kind === "killer" ? .57 : .5),
+            xx + s * .5,
+            yy + s * .5,
             String(a[i]),
             s * .66,
             conflict ? c.error : fixed ? c.ink : c.accent,
           ).setOrigin(.5);
         } else {
-          const notePad = 5;
+          const notePad = p.kind === "killer" ? 4 : 2;
           const noteTop = p.kind === "killer" && p.cages.some((cage) => cage.cells[0] === i)
-            ? 3 + Math.max(13, s * .3)
+            ? 1 + Math.max(10, s * .26)
             : notePad;
           const noteHeight = s - noteTop - notePad;
+          const slotWidth = (s - notePad * 2) / 3, slotHeight = noteHeight / 3;
           for (const v of state.notes[i] || []) {
             const note = this.text(
-              xx + notePad + ((v - 1) % 3 + .5) * (s - notePad * 2) / 3,
-              yy + noteTop + (Math.floor((v - 1) / 3) + .5) * noteHeight / 3,
+              xx + notePad + ((v - 1) % 3 + .5) * slotWidth,
+              yy + noteTop + (Math.floor((v - 1) / 3) + .5) * slotHeight,
               String(v),
-              Math.min(s * .28, noteHeight * .4),
+              s * .5,
               blend(c.muted, c.ink, .35),
             ).setOrigin(.5);
-            note.setScale(Math.min(1, noteHeight / 3 * .95 / note.height));
+            // Measure digit ink instead of reserving unused ascender/descender space.
+            // Fit all nine candidates tightly into their slots, including below cage totals.
+            note.setStyle({ testString: "0123456789", lineSpacing: 0 });
+            note.setScale(Math.min(1, (slotWidth - .75) / note.width, (slotHeight - .75) / note.height));
           }
         }
       } else if (p.kind === "queens") {
@@ -2013,6 +2016,9 @@ class Daybook extends Phaser.Scene {
     };
     for (const cage of p.cages) {
       const set = new Set(cage.cells);
+      const first = cage.cells[0], cx = x + first % n * s, cy = y + (first / n | 0) * s;
+      const label = this.text(cx + .5, cy + .5, String(cage.sum), Math.max(10, s * .26), this.C.ink)
+        .setStyle({ testString: "0123456789", lineSpacing: 0 });
       for (const i of cage.cells) {
         const xx = x + i % n * s, yy = y + (i / n | 0) * s, pad = 3;
         const top = !set.has(i - n), bottom = !set.has(i + n);
@@ -2021,22 +2027,13 @@ class Daybook extends Phaser.Scene {
         // Continue straight cage sides across cell joins instead of leaving a gap at each gridline.
         const x1 = xx + (left ? pad : 0), x2 = xx + s - (right ? pad : 0);
         const y1 = yy + (top ? pad : 0), y2 = yy + s - (bottom ? pad : 0);
-        if (top) dashed(x1, yy + pad, x2, yy + pad);
+        // The total sits on the cage boundary. Leave a gap in the dashes for its ink,
+        // without painting a background over the cell or its selection highlight.
+        if (top) dashed(i === first ? Math.max(x1, label.x + label.width + 1) : x1, yy + pad, x2, yy + pad);
         if (right) dashed(xx + s - pad, y1, xx + s - pad, y2);
         if (bottom) dashed(x1, yy + s - pad, x2, yy + s - pad);
-        if (left) dashed(xx + pad, y1, xx + pad, y2);
+        if (left) dashed(xx + pad, i === first ? Math.max(y1, label.y + label.height + 1) : y1, xx + pad, y2);
       }
-      const i = cage.cells[0], xx = x + i % n * s, yy = y + (i / n | 0) * s;
-      this.box(
-        xx + 4,
-        yy + 3,
-        Math.max(16, s * .4),
-        Math.max(13, s * .3),
-        this.C.panel,
-        undefined,
-        0,
-      );
-      this.text(xx + 5, yy + 2, String(cage.sum), Math.max(10, s * .26), this.C.ink);
     }
   }
   drawPipes() {
