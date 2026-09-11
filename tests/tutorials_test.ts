@@ -66,7 +66,7 @@ Deno.test("Tutorial first-run flags are independent per game and persist across 
   const first = new TutorialStore(storage);
   assert(!first.hasSeen("sudoku"), "New device should see the tutorial");
   first.markSeen("sudoku");
-  assert(first.hasSeen("sudoku"), "Finishing or skipping should mark the game seen");
+  assert(first.hasSeen("sudoku"), "Completing the tutorial should mark the game seen");
   const next = new TutorialStore(storage);
   assert(next.hasSeen("sudoku"), "Daily and practice share a game flag across sessions");
   assert(!next.hasSeen("killer"), "Killer has its own tutorial");

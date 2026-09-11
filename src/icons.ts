@@ -3,6 +3,8 @@ import type Phaser from "phaser";
 export const ACTION_ICONS: Record<string, string> = {
   Settings: "gear",
   "Back to collection": "back",
+  "Previous month": "back",
+  "Next month": "forward",
   Undo: "undo",
   Redo: "redo",
   Notes: "pencil",
@@ -42,6 +44,10 @@ export function drawActionIcon(
     case "back":
       line(.35, -.7, -.35, 0);
       line(-.35, 0, .35, .7);
+      break;
+    case "forward":
+      line(-.35, -.7, .35, 0);
+      line(.35, 0, -.35, .7);
       break;
     case "undo":
     case "redo": {
