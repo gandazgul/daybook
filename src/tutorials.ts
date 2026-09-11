@@ -156,7 +156,7 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
     ]),
     step(
       "Write a number",
-      "Select an empty cell, then tap a keypad digit or press 1–9. Backspace or the × button clears an entry.",
+      "Select an empty cell, then tap a keypad digit or press 1–9. Backspace or the eraser button clears an entry.",
       [blank],
     ),
     step(
@@ -556,7 +556,7 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
         ),
         example(
           "How to mark a square",
-          "Tap once for water, twice for land (a dot), and again to clear. A blank square is still undecided. Numbered squares always stay land.",
+          "Tap or drag to change each square once: blank → water → land dot → blank. Drag over water to mark land dots. Numbered squares always stay land.",
           ["?#o", "???", "???"],
           [0, 1, 2],
         ),

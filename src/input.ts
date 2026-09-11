@@ -53,6 +53,24 @@ export function gridLine(from: number, to: number, size: number): number[] {
 
 type Mark = { index: number; value: number };
 
+/** Cycle each editable cell once per stroke, including cells skipped by pointer sampling. */
+export function cyclePaintCells(
+  from: number,
+  to: number,
+  size: number,
+  values: number[],
+  clues: number[],
+  visited: Set<number>,
+): Mark[] {
+  const marks: Mark[] = [];
+  for (const index of gridLine(from, to, size)) {
+    if (visited.has(index) || clues[index] > 0) continue;
+    visited.add(index);
+    marks.push({ index, value: (values[index] + 1) % 3 });
+  }
+  return marks;
+}
+
 /** Gesture state only; the scene applies edits and owns persistence/undo. */
 export class QueensInput {
   private lastTap?: { index: number; time: number };

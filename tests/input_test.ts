@@ -1,4 +1,4 @@
-import { gridLine, pruneSudokuNotes, QueensInput } from "../src/input.ts";
+import { cyclePaintCells, gridLine, pruneSudokuNotes, QueensInput } from "../src/input.ts";
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -115,4 +115,31 @@ Deno.test("Grid drags follow rows, columns and diagonals without wrapping rows",
   equal(gridLine(30, 0, 6), [30, 24, 18, 12, 6, 0]);
   equal(gridLine(0, 35, 6), [0, 7, 14, 21, 28, 35]);
   equal(gridLine(5, 6, 6), [5, 4, 3, 8, 7, 6]);
+});
+
+Deno.test("Nurikabe painting cycles mixed cells and skips numbered land", () => {
+  const values = [0, 1, 2, 2], clues = [0, 0, 0, 3];
+  const marks = cyclePaintCells(0, 3, 4, values, clues, new Set());
+  equal(values, [0, 1, 2, 2]); // Scene retains the original values for undo.
+  apply(values, marks);
+  equal(values, [1, 2, 0, 2]);
+});
+
+Deno.test("Nurikabe fast drags fill intervening cells, but backtracking never cycles twice", () => {
+  const values = Array(16).fill(0), clues = Array(16).fill(0), visited = new Set<number>();
+  apply(values, cyclePaintCells(0, 3, 4, values, clues, visited));
+  apply(values, cyclePaintCells(3, 0, 4, values, clues, visited));
+  equal(values.slice(0, 4), [1, 1, 1, 1]);
+  apply(values, cyclePaintCells(0, 12, 4, values, clues, visited));
+  equal([values[0], values[4], values[8], values[12]], [1, 1, 1, 1]);
+  apply(values, cyclePaintCells(0, 3, 4, values, clues, new Set()));
+  equal(values.slice(0, 4), [2, 2, 2, 2]);
+});
+
+Deno.test("Nurikabe can start a stroke on a clue and paint beyond it", () => {
+  const values = [2, 0, 1], clues = [3, 0, 0], visited = new Set<number>();
+  equal(cyclePaintCells(0, 0, 3, values, clues, visited), []);
+  equal(visited.size, 0);
+  apply(values, cyclePaintCells(0, 2, 3, values, clues, visited));
+  equal(values, [2, 1, 2]);
 });
