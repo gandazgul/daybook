@@ -1917,7 +1917,7 @@ class Daybook extends Phaser.Scene {
     const sudokuGrid = p.kind === "sudoku" || p.kind === "killer";
     const grid = this.add.graphics().lineStyle(1, sudokuGrid ? blend(c.line, c.ink, .2) : c.line);
     for (let i = 0; i <= n; i++) {
-      // Both Sudokus use spacing for cells and boxes, without solid grid lines.
+      // Individual Sudoku cells use spacing; only the 3 × 3 boxes have borders.
       if (sudokuGrid) continue;
       grid.lineBetween(x + i * s, y, x + i * s, y + size);
       grid.lineBetween(x, y + i * s, x + size, y + i * s);
@@ -1928,6 +1928,12 @@ class Daybook extends Phaser.Scene {
         const gap = i % 3 === 0 ? 4 : 2;
         gaps.fillRect(x + i * s - gap / 2, y, gap, size);
         gaps.fillRect(x, y + i * s - gap / 2, size, gap);
+      }
+      const boxBorders = this.add.graphics().lineStyle(2, 0x000000);
+      boxBorders.strokeRect(x + 1, y + 1, size - 2, size - 2);
+      for (let i = 3; i < n; i += 3) {
+        boxBorders.lineBetween(x + i * s, y, x + i * s, y + size);
+        boxBorders.lineBetween(x, y + i * s, x + size, y + i * s);
       }
       // Cages may span boxes; keep their dashed outlines continuous across the spacing.
       if (p.kind === "killer") this.drawCages();
@@ -2017,7 +2023,7 @@ class Daybook extends Phaser.Scene {
     for (const cage of p.cages) {
       const set = new Set(cage.cells);
       const first = cage.cells[0], cx = x + first % n * s, cy = y + (first / n | 0) * s;
-      const label = this.text(cx + .5, cy + .5, String(cage.sum), Math.max(10, s * .26), this.C.ink)
+      const label = this.text(cx + 2.5, cy + 2.5, String(cage.sum), Math.max(10, s * .26), this.C.ink)
         .setStyle({ testString: "0123456789", lineSpacing: 0 });
       for (const i of cage.cells) {
         const xx = x + i % n * s, yy = y + (i / n | 0) * s, pad = 3;
