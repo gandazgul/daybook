@@ -1,4 +1,7 @@
 import { findSets, generateSets } from "./sets.ts";
+import { generateAkari, validAkari } from "./akari.ts";
+import { isDifficulty, supportsDifficulty, type Difficulty } from "./difficulty.ts";
+import { generateRatedQueens, QUEENS_SIZES } from "./queens-difficulty.ts";
 import {
   generateDosun,
   generateFiveCells,
@@ -23,7 +26,9 @@ export type Kind =
   | "sets"
   | "dosun"
   | "nurikabe"
-  | "fivecells";
+  | "fivecells"
+  | "akari";
+// All playable games, in practice order. Daily membership is date-versioned below.
 export const KINDS: readonly Kind[] = [
   "pipes",
   "atoms",
@@ -31,17 +36,22 @@ export const KINDS: readonly Kind[] = [
   "shikaku",
   "snap",
   "mambo",
-  // "mosaic", // Hidden for now. Keep its generator, rules, hints and saved progress.
   "sets",
   "dosun",
   "nurikabe",
+  "akari",
   "fivecells",
+  "mosaic",
   "sudoku",
   "killer",
 ] as const;
 export const EXTRA_GAMES_START = "2026-09-09";
+export const AKARI_START = "2026-09-14";
 export function kindsForDate(date: string): readonly Kind[] {
   return KINDS.filter((kind) =>
+    kind !== "mosaic" &&
+    (kind !== "akari" || date >= AKARI_START) &&
+    (kind !== "fivecells" || date < AKARI_START) &&
     (kind !== "sets" || date >= "2026-09-11") &&
     (date >= EXTRA_GAMES_START || !["dosun", "nurikabe", "fivecells"].includes(kind))
   );
@@ -125,7 +135,7 @@ export const META: Record<
       "Place exactly one queen in each row, column, and colored region.",
       "Queens cannot touch, including diagonally.",
       "Double-click or double-tap to place a queen. Tap a mark to clear it.",
-      "Single-click or tap to mark an X; drag to mark several. Dragging preserves queens.",
+      "Single-click or tap to mark an X; drag to toggle each square between X and empty. Dragging preserves queens.",
       "X marks are optional notes.",
       "Keyboard: arrows select; Space cycles empty → queen → X → empty.",
     ],
@@ -250,6 +260,22 @@ export const META: Record<
     color: 0x816777,
     pale: 0xeee1e8,
   },
+  akari: {
+    name: "Akari",
+    category: "LIGHT THE WAY",
+    description: "A little light in every square.",
+    rules: [
+      "Light every white square by placing bulbs in white squares.",
+      "A bulb lights its own square and shines along its row and column until a black square or the edge.",
+      "Two bulbs must never shine on each other. Black squares block light.",
+      "A number on a black square gives the exact number of bulbs touching its sides, not its corners. A 0 permits none.",
+      "Unnumbered black squares have no bulb-count requirement.",
+      "Tap to cycle bulb → X note → empty. Xs are optional; squares without bulbs can stay blank.",
+      "Keyboard: arrows select a square; Space cycles its mark. Red bulbs or clues show conflicts.",
+    ],
+    color: 0x91743e,
+    pale: 0xf1e8ce,
+  },
 };
 export class Random {
   private value: number;
@@ -289,6 +315,7 @@ export interface Link {
 }
 export interface Puzzle {
   kind: Kind;
+  difficulty?: Difficulty;
   size: number;
   seed: string;
   initial: number[];
@@ -994,12 +1021,15 @@ export function generateMosaic(p: Puzzle, rng: Random, allowTrivial = false) {
 }
 
 const cache = new Map<string, Puzzle>();
-export function generate(kind: Kind, seed: string): Puzzle {
-  const key = `v${GENERATOR_VERSION}:${kind}:${seed}`;
+export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puzzle {
+  if (difficulty !== undefined && (!isDifficulty(difficulty) || !supportsDifficulty(kind))) {
+    throw new Error(`Unsupported difficulty for ${kind}`);
+  }
+  const key = `v${GENERATOR_VERSION}:${kind}:${seed}` + (difficulty ? `:difficulty-v1:${difficulty}` : "");
   const existing = cache.get(key);
   if (existing) return existing;
   const rng = new Random(key),
-    size = kind === "sudoku" || kind === "killer"
+    size = kind === "queens" && difficulty ? QUEENS_SIZES[difficulty] : kind === "sudoku" || kind === "killer"
       ? 9
       : kind === "atoms" || kind === "sets"
       ? 4
@@ -1007,6 +1037,7 @@ export function generate(kind: Kind, seed: string): Puzzle {
       ? 5
       : 6;
   const p = blank(kind, seed, size);
+  if (difficulty) p.difficulty = difficulty;
   // Keep today and archived daily layouts stable; practice and future days get quality guards.
   const allowTrivial = /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-12";
   switch (kind) {
@@ -1015,7 +1046,8 @@ export function generate(kind: Kind, seed: string): Puzzle {
       sudoku(p, rng);
       break;
     case "queens":
-      queens(p, rng);
+      if (difficulty) generateRatedQueens(p, rng, difficulty);
+      else queens(p, rng);
       break;
     case "pipes":
       pipes(p, rng);
@@ -1047,6 +1079,9 @@ export function generate(kind: Kind, seed: string): Puzzle {
       break;
     case "fivecells":
       generateFiveCells(p, rng);
+      break;
+    case "akari":
+      generateAkari(p, rng);
       break;
   }
   if (cache.size > 100) cache.delete(cache.keys().next().value!);
@@ -1155,6 +1190,8 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
       return validNurikabe(p.clues, a, n);
     case "fivecells":
       return validFiveCells(p.clues, p.edges, a, n);
+    case "akari":
+      return validAkari(p.clues, a, n);
     case "mambo":
       return a.every((v) => v === 1 || v === 2) && validBalance(a, n, p.links);
   }

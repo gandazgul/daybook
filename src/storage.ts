@@ -6,6 +6,7 @@ import {
   kindsForDate,
   type Puzzle,
 } from "./puzzles.ts";
+import { DIFFICULTIES, type Difficulty, supportsDifficulty } from "./difficulty.ts";
 export interface Progress {
   values: number[];
   notes: Record<number, number[]>;
@@ -50,11 +51,11 @@ export class ProgressStore {
       this.available = false;
     }
   }
-  key(date: string, kind: Kind) {
-    return `${date}/${kind}`;
+  key(date: string, kind: Kind, difficulty?: Difficulty) {
+    return `${date}/${kind}` + (difficulty ? `/difficulty-v1/${difficulty}` : "");
   }
-  get(date: string, kind: Kind): Progress | undefined {
-    const p = this.records[this.key(date, kind)];
+  get(date: string, kind: Kind, difficulty?: Difficulty): Progress | undefined {
+    const p = this.records[this.key(date, kind, difficulty)];
     if (
       !p || !Array.isArray(p.values) || !p.values.every(Number.isInteger) ||
       !Number.isFinite(p.elapsed) || p.elapsed < 0 || typeof p.completed !== "boolean" ||
@@ -68,7 +69,7 @@ export class ProgressStore {
     return structuredClone(p);
   }
   load(puzzle: Puzzle): Progress {
-    const saved = this.get(puzzle.seed, puzzle.kind);
+    const saved = this.get(puzzle.seed, puzzle.kind, puzzle.difficulty);
     const good = saved && this.validEntries(puzzle, saved.values) &&
       (puzzle.kind === "snap"
         ? saved.values.length <= puzzle.size ** 2
@@ -103,6 +104,8 @@ export class ProgressStore {
         return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 3);
       case "nurikabe":
         return a.every((v, i) => v >= 0 && v <= 2 && (!p.clues[i] || v === 2));
+      case "akari":
+        return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 2);
       case "sets":
       case "fivecells":
         return a.every((v) => v === 0 || v === 1);
@@ -115,8 +118,8 @@ export class ProgressStore {
           ) && a.map((i) => p.clues[i]).filter((v) => v > 0).every((v, i) => v === i + 1);
     }
   }
-  save(date: string, kind: Kind, progress: Progress) {
-    this.records[this.key(date, kind)] = structuredClone(progress);
+  save(date: string, kind: Kind, progress: Progress, difficulty?: Difficulty) {
+    this.records[this.key(date, kind, difficulty)] = structuredClone(progress);
     // Practice is intentionally session-only, keeping the archive small and durable.
     if (date.startsWith("practice:")) return;
     try {
@@ -132,11 +135,16 @@ export class ProgressStore {
     }
   }
   count(date: string) {
-    return kindsForDate(date).filter((kind) => this.get(date, kind)?.completed).length;
+    return kindsForDate(date).filter((kind) => this.dailyProgress(date, kind)?.completed).length;
+  }
+  dailyProgress(date: string, kind: Kind): Progress | undefined {
+    const variants = [this.get(date, kind), ...(supportsDifficulty(kind)
+      ? DIFFICULTIES.map((difficulty) => this.get(date, kind, difficulty)) : [])];
+    return variants.find((p) => p?.completed) ?? variants.find((p) => p && p.elapsed > 0);
   }
   started(date: string) {
     return kindsForDate(date).some((kind) => {
-      const p = this.get(date, kind);
+      const p = this.dailyProgress(date, kind);
       return p && (p.elapsed > 0 || p.completed);
     });
   }

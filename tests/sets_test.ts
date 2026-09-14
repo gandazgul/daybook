@@ -52,10 +52,10 @@ Deno.test("Sets bounded-generation fallback still has exactly three sets", () =>
   assert(JSON.stringify(p.clues) === JSON.stringify(EXAMPLE_CARDS));
   assert(enumerate(p.clues).length === 3 && new Set(enumerate(p.clues).flat()).size === 8);
 });
-Deno.test("Hidden Mosaic stays loadable but never counts toward daily completion; Sets starts September 11", () => {
+Deno.test("Practice Mosaic never counts toward daily completion; Sets starts September 11", () => {
   const data = new Map<string, string>();
   const store = new ProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => { data.set(k, v); } });
-  assert(!KINDS.includes("mosaic") && KINDS.includes("sets"));
+  assert(KINDS.includes("mosaic") && KINDS.includes("sets"));
   assert(KINDS.slice(-2).join() === "sudoku,killer", "Sudokus must finish the practice collection");
   for (const date of ["2026-09-08", "2026-09-10", "2026-09-11"]) {
     assert(!kindsForDate(date).includes("mosaic"));

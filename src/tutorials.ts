@@ -1,4 +1,5 @@
 import { EXAMPLE_CARDS, cardAttributes } from "./sets.ts";
+import { akariSight, AKARI_WHITE } from "./akari.ts";
 import finishedBoards from "./tutorial-boards.json" with { type: "json" };
 import type { Kind, Puzzle } from "./puzzles.ts";
 import type { StorageLike } from "./storage.ts";
@@ -67,6 +68,8 @@ const finishedGoals: Record<Exclude<Kind, "nurikabe">, string> = {
     "Each colored region has one white balloon and one black weight. Balloons are supported above; weights below. Unused squares can stay blank.",
   fivecells:
     "Every outlined group contains exactly five squares. A clue counts the sides of its square that lie on a group boundary, including the board edge.",
+  akari:
+    "Every white square is lit. Bulbs do not shine on each other, and every numbered wall has exactly its number of bulbs touching its sides.",
 };
 
 export function tutorialSteps(p: VisiblePuzzle): TutorialStep[] {
@@ -182,6 +185,18 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
     ),
   ];
   switch (p.kind) {
+    case "akari": {
+      const white = first((i) => p.clues[i] === AKARI_WHITE);
+      const numbered = first((i) => p.clues[i] >= 0);
+      return [
+        step("Light every white square", "Place bulbs in white squares. The warm shading shows which squares are lit; every white square needs light.", all.filter((i) => p.clues[i] === AKARI_WHITE)),
+        step("Light travels straight", "A bulb lights its own square and shines along its row and column. Black squares and the outer edge stop the light. Light does not bend or travel diagonally.", akariSight(p.clues, n)[white]),
+        step("Bulbs need their own space", "Never place two bulbs where one can shine on the other. A black square between them blocks the light, so bulbs on opposite sides of that wall are allowed.", akariSight(p.clues, n)[white]),
+        step("Numbers count neighboring bulbs", "A number on a black square gives the exact number of bulbs touching its four sides. Diagonal bulbs do not count. A 0 forbids bulbs on all neighboring white squares.", [numbered, ...all.filter((i) => Math.abs(Math.floor(i / n) - Math.floor(numbered / n)) + Math.abs(i % n - numbered % n) === 1)]),
+        step("Unnumbered walls", "A black square without a number only blocks light. It does not require any particular number of neighboring bulbs.", all.filter((i) => p.clues[i] === -1)),
+        step("Bulb, note, or empty", "Tap a white square to cycle bulb → X → empty. Xs are optional notes for squares without bulbs. With a keyboard, use arrows and Space. Black squares cannot be changed.", [white]),
+      ];
+    }
     case "sets":
       return [];
     case "sudoku":
@@ -292,7 +307,7 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
         ),
         step(
           "Optional X marks",
-          "Single-tap to mark an X, or drag to mark several. Dragging preserves queens. Xs are only notes and are not required to finish.",
+          "Single-tap to mark an X. Drag to toggle each square once: empty becomes X, and X becomes empty. Dragging preserves queens. Xs are optional notes.",
           row(0),
         ),
       ];

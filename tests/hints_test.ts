@@ -14,7 +14,7 @@ function partial(p: Puzzle, rng: Random, density: number) {
   }
   return p.initial.map((v, i) => rng.next() < density ? p.solution[i] : v);
 }
-Deno.test("Reveals progress all twelve daily and practice games to valid completion without mutating inputs", () => {
+Deno.test("Reveals progress all daily and practice games to valid completion without mutating inputs", () => {
   for (const kind of KINDS) {
     for (const seed of ["2026-09-09", "practice:hint"]) {
       const p = generate(kind, seed), original = JSON.stringify(p);
@@ -80,7 +80,7 @@ Deno.test("Smart hints use only visible information and their moves agree with v
         } else {
           hint.values.forEach((v, i) => {
             if (v === values[i]) return;
-            const same = v === answer[i] || (kind === "queens" && v === 2 && answer[i] === 0);
+            const same = v === answer[i] || ((kind === "queens" || kind === "akari") && v === 2 && answer[i] === 0);
             assert(
               same,
               `${kind}: deduction at ${i} (${v}) contradicts valid solution (${

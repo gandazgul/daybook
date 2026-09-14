@@ -7,6 +7,7 @@ import {
   generate,
   isSolved,
   KINDS,
+  kindsForDate,
   mosaicClueConflict,
   Random,
   rotate,
@@ -53,8 +54,8 @@ Deno.test("consecutive days and practice produce fresh content", () => {
     assert(generate(kind, "practice:one").seed === "practice:one");
   }
   assert(
-    new Set(Array.from({ length: KINDS.length }, (_, i) => featured(`2026-09-${11 + i}`))).size ===
-      KINDS.length,
+    new Set(Array.from({ length: kindsForDate("2026-09-14").length }, (_, i) => featured(`2026-09-${14 + i}`))).size ===
+      kindsForDate("2026-09-14").length,
   );
 });
 Deno.test("rotation, RNG, date and duration boundaries", () => {

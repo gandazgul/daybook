@@ -1,4 +1,5 @@
 import { findSets, setDescription } from "./sets.ts";
+import { akariLights, AKARI_WHITE } from "./akari.ts";
 import { fiveCellOptions } from "./extra-puzzles.ts";
 import { adjacent, direction, isSolved, type Puzzle, rectangle, rotate } from "./puzzles.ts";
 
@@ -51,6 +52,39 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
   const col = (i: number) => all.filter((j) => i % n === j % n);
   const put = (i: number, v: number, why: string, cells = [i]) => move(a, i, v, why, cells);
   switch (p.kind) {
+    case "akari": {
+      const { sight, lit, conflicts } = akariLights(p.clues, a, n);
+      if (conflicts.size) return problem(
+        "Two bulbs must not shine on each other, and each numbered wall needs exactly that many neighboring bulbs. Check the highlighted bulbs or clues and any X marks beside them.",
+        [...conflicts],
+      );
+      const candidates = (cells: number[]) => cells.filter((j) => p.clues[j] === AKARI_WHITE && a[j] === 0 && !lit[j]);
+      for (const i of all) {
+        if (p.clues[i] < 0) continue;
+        const neighbors = adjacent(i, n).filter((j) => p.clues[j] === AKARI_WHITE);
+        const bulbs = neighbors.filter((j) => a[j] === 1).length;
+        const options = candidates(neighbors);
+        if (bulbs === p.clues[i]) {
+          const empty = neighbors.find((j) => a[j] === 0);
+          if (empty !== undefined) return put(empty, 2,
+            `The ${p.clues[i]} wall at ${at(i, n)} already has all its bulbs. Its other neighboring squares cannot contain bulbs. Mark this square X.`, [i, ...neighbors]);
+        } else if (options.length && options.length === p.clues[i] - bulbs) {
+          return put(options[0], 1,
+            `The ${p.clues[i]} wall at ${at(i, n)} needs ${options.length} more bulbs, and only these ${options.length} neighboring squares can hold them. Place a bulb here.`, [i, ...options]);
+        }
+      }
+      for (const i of all) {
+        if (p.clues[i] !== AKARI_WHITE || lit[i]) continue;
+        const options = candidates(sight[i]);
+        if (!options.length) return problem("This unlit square has nowhere left for a bulb that can light it. Check the X marks and nearby bulbs.", sight[i]);
+        if (options.length === 1) return put(options[0], 1,
+          `The unlit square at ${at(i, n)} can receive light from only one available square. Place a bulb in that square.`, [i, options[0]]);
+      }
+      const illuminated = all.find((i) => p.clues[i] === AKARI_WHITE && a[i] === 0 && lit[i]);
+      if (illuminated !== undefined) return put(illuminated, 2,
+        "This square is already illuminated by another bulb. A bulb here would shine on that bulb, so mark it X.", sight[illuminated]);
+      break;
+    }
     case "sets": {
       const triples = findSets(p.clues), index = triples.findIndex((_, i) => !a[i]);
       if (index < 0) return { title: "Already complete", text: "All three sets have been found.", cells: range(8) };
@@ -694,6 +728,7 @@ export function revealHint(p: Puzzle, a: number[]): Hint {
     }
   }
   const differs = (v: number, i: number) => {
+    if (p.kind === "akari" && v === 0 && a[i] === 2) return false;
     if (p.kind === "queens" && v === 0 && a[i] === 2) return false;
     if (p.kind === "mosaic" && v === 2 && a[i] === 0) return false;
     if (p.kind === "dosun" && v === 0 && a[i] === 3) return false;
@@ -716,6 +751,8 @@ export function revealHint(p: Puzzle, a: number[]): Hint {
           ? v === 1 ? "a circle" : "a diamond"
           : p.kind === "queens"
           ? v === 1 ? "a queen" : "empty"
+          : p.kind === "akari"
+          ? v === 1 ? "a bulb" : "empty"
           : p.kind === "dosun"
           ? v === 1 ? "a white balloon" : v === 2 ? "a black weight" : "empty"
           : p.kind === "nurikabe"

@@ -12,7 +12,7 @@ illustrations, menus, and controls are drawn in the game engine.
   progress.
 - **Install and play offline:** a phone-friendly PWA with on-device puzzle generation and locally
   saved daily progress.
-- **Learn the rules:** first-visit tutorials for all twelve games, replayable from each puzzle page.
+- **Learn the rules:** first-visit tutorials for all fourteen games, replayable from each puzzle page.
   Every tutorial starts with a finished example; highlights explain each rule.
 - **Two kinds of hints:** preview one revealed move or an explained logical deduction in any daily
   or practice puzzle. Hints run locally and work offline.
@@ -34,14 +34,16 @@ Phaser renders at device pixel density (up to 3×) for clear text and lines on p
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----- |
 | Pipes           | Rotate pipes to connect every tile and endpoint to the water source without leaks                                        | 5 × 5 |
 | Atoms           | Match each atom's required bonds using one or two lines between adjacent atoms; connect the whole network                | 4 × 4 |
-| Regional Queens | Place one queen per row, column, and region; queens cannot touch, even diagonally                                        | 6 × 6 |
+| Regional Queens | Place one queen per row, column, and region; queens cannot touch, even diagonally                                        | 6 × 6–8 × 8 |
 | Shikaku         | Cover the grid with rectangles, each containing one clue equal to its area                                               | 6 × 6 |
 | Number Path     | Visit numbered dots in order along one path that fills every square exactly once                                         | 5 × 5 |
 | Balance         | Place three of each shape per row and column, with no three consecutive identical shapes; satisfy = and × clues          | 6 × 6 |
 | Sets            | Find exactly three different sets: each feature must be all the same or all different across three cards                  | 8 cards |
 | Dosun-Fuwari    | Place one supported balloon and one supported weight in each region                                                      | 6 × 6 |
 | Nurikabe        | Make numbered islands of exact sizes, with one clue each, surrounded by connected water with no solid 2 × 2 water blocks | 5 × 5 |
+| Akari           | Illuminate every white square with bulbs; bulbs cannot shine on each other; satisfy neighboring-bulb counts on black squares | 6 × 6 |
 | Five Cells      | Partition the grid into connected groups of five; clues count bordering sides, including the outer frame                 | 5 × 5 |
+| Mosaic          | Shade squares so every clue matches the shaded cells in its surrounding 3 × 3 area, including itself                     | 6 × 6 |
 | Sudoku          | Place 1–9 once in each row, column, and 3 × 3 box                                                                        | 9 × 9 |
 | Killer Sudoku   | Follow Sudoku rules and satisfy cage totals, without repeating digits inside a cage                                      | 9 × 9 |
 
@@ -51,11 +53,12 @@ card participates, and one card is shared by two sets. Found cards stay availabl
 trio below the board to review it. Smart hints explain the four feature checks; reveals record
 one new set after preview.
 
-Mosaic is temporarily hidden: its collection entry is commented out, while its code, tutorials,
-hints and saved progress remain intact. It does not count toward daily completion.
+Five Cells and Mosaic are **practice-only** in current collections. Akari replaces Five Cells in
+the daily slot from September 14, 2026. Older calendar dates retain Five Cells and its saved progress;
+Mosaic never counts toward daily completion. All fourteen games are available in practice.
 
 Completion is checked against each game's rules. Sudoku, Killer Sudoku, Regional Queens, Shikaku,
-Balance, Mosaic, Dosun-Fuwari, Nurikabe, and Five Cells have solver-checked unique solutions. Pipes,
+Balance, Mosaic, Dosun-Fuwari, Nurikabe, Five Cells, and Akari have solver-checked unique solutions. Pipes,
 Atoms, and Number Path are generated from valid constructions and accept any valid solution.
 
 Regional Queens uses the regional placement rules, so queens do not attack along an entire chess
@@ -65,10 +68,18 @@ with their correct shading locked; empty marks on other squares are optional aid
 squares can stay blank. Unused Dosun-Fuwari squares can stay blank.
 
 Quality guards reject Shikaku boards where every rectangle is immediately forced, Dosun-Fuwari
-boards solved just by filling each ceiling and floor, and hidden Mosaic boards with fewer than four
+boards solved just by filling each ceiling and floor, and Mosaic boards with fewer than four
 shaded cells left to find. Bounded fallbacks satisfy the same checks and have unique solutions.
 These guards apply to practice and daily boards from September 12, 2026; earlier daily layouts and
-saved progress stay unchanged. Mosaic remains hidden and does not count toward daily completion.
+saved progress stay unchanged. Mosaic is available in practice and does not count toward daily completion.
+
+Akari generates 6 × 6 boards with connected lines of light blocked by black squares. Every board has
+one solution and at least four bulbs to find. Generation and clue removal both verify uniqueness;
+a bounded, verified fallback keeps generation available offline. Numbered black squares constrain
+orthogonally adjacent bulbs, including zero clues. Unnumbered walls only block light. Lit cells use
+a warm tint; conflicting bulbs and impossible numbered clues turn red. Optional X notes are never
+required for completion. Smart hints explain clue counts, illuminated exclusions, and the only
+remaining place that can light a square; reveal hints show one bulb or clearing move.
 
 New Nurikabe daily boards from September 11, 2026, and all new practice boards include at least
 one island larger than 1, including the generation fallback. Earlier daily boards remain unchanged
@@ -77,7 +88,8 @@ to preserve saved progress. All new boards still have a solver-checked unique so
 The additional rules references are Nikoli's
 [Dosun-Fuwari](https://www.nikoli.co.jp/en/puzzles/dosun_fuwari/),
 [Nurikabe](https://www.nikoli.co.jp/en/puzzles/nurikabe/), and
-[Five Cells](https://www.nikoli.co.jp/en/puzzles/five_cells/). Daybook's generators, wording, and
+[Five Cells](https://www.nikoli.co.jp/en/puzzles/five_cells/), and
+[Akari](https://www.nikoli.co.jp/en/puzzles/akari/). Daybook's generators, wording, and
 Phaser drawings are independently implemented.
 
 ## Install and play offline
@@ -150,17 +162,19 @@ puzzles, AI service, account, or network calls.
 
 Logical rules include Sudoku singles and cage totals, Mosaic clue counts and overlapping areas,
 Queens exclusions, Balance constraints, pipe orientation constraints, bond capacity, Shikaku
-rectangle candidates, legal path continuations, island boundaries, supported pieces, and possible
-five-square groups. They do not yet constitute a complete logical solver for every position.
+rectangle candidates, legal path continuations, island boundaries, supported pieces, possible
+five-square groups, and Akari illumination and neighboring-bulb counts. They do not yet constitute
+a complete logical solver for every position.
 
 ## Daily collection and practice
 
-- Each **local calendar date** deterministically seeds one puzzle of each kind. The same date and
-  generator version produce the same puzzles on every device.
+- Each **local calendar date** deterministically seeds each puzzle. The same date, game, difficulty,
+  and generator version produce the same board on every device.
 - Dosun-Fuwari, Nurikabe, and Five Cells join daily collections from **September 9, 2026**. Earlier
-  dates now show eight active games, with Mosaic hidden. September 9–10 show eleven; Sets joins
-  the daily collection on September 11, 2026. All twelve active games are available in practice.
-  Hidden Mosaic never counts toward the daily total. Existing saved puzzle identifiers are unchanged.
+  dates show eight daily games. September 9–10 show eleven; Sets joins the daily collection on
+  September 11, 2026. Akari replaces Five Cells on September 14, keeping twelve daily games.
+  All fourteen games are available in practice, including Five Cells and Mosaic. Mosaic never
+  counts toward the daily total. Existing saved puzzle identifiers are unchanged.
 - Sudoku and Killer Sudoku appear last in daily and practice collections, and in the next-puzzle order.
 - The featured game rotates through the kinds available on that date. Puzzles generate on demand, so
   an unattended server needs no cron job.
@@ -182,6 +196,39 @@ your puzzle history. If storage is blocked, the collection shows that progress i
 
 Completed puzzles remain visible, with the success message and next-puzzle button beside the board
 on desktop or below it on smaller screens.
+
+## Difficulty
+
+Regional Queens is the first game with selectable difficulty. The other games keep their existing
+generators and do not display unverified ratings.
+
+- **Easy, 6 × 6:** solvable by repeatedly finding the only available square in a row, column, or region.
+- **Medium, 7 × 7:** requires combining exclusions across units, including squares ruled out by every
+  possible queen position in another unit.
+- **Hard, 8 × 8:** also requires testing candidate placements and following their consequences to a
+  contradiction. The rating solver uses bounded candidate trials rather than recursive guessing.
+
+Ratings describe the logical techniques required, not measured human solving times. Every generated
+board has one solution, connected regions, and the requested rating. Generation starts from one of
+16 verified boards per level, changes region boundaries while rechecking these properties, then
+rotates, reflects, and relabels the regions. This keeps generation bounded and offline, with a valid
+board even when no proposed boundary changes pass. The bank and generation algorithm belong to
+`difficulty-v1`; changing them after release requires retaining the old version for saved boards.
+
+Daily Queens uses a shared, date-seeded difficulty pick from **September 15, 2026**. The collection
+shows that level; open the puzzle and use **Easy / Medium / Hard · Change** to choose another. Each
+date and level has its own board, entries, notes, time, and completion. Changing a level preserves
+the previous board, and the last chosen level resumes for that date. Finishing **any** level completes
+Queens for the daily collection; finishing more levels still counts once. Tomorrow starts with its
+shared pick. Earlier dates retain their **Original** board and saves, with the new levels available
+as alternatives. Original boards are not retroactively labeled as a rated tier.
+An existing Original save also stays the default when a device installs this update after that date.
+
+Practice asks for a level before opening Queens, remembers that choice for later practice, and keeps
+it for **Another of these**. Practice progress remains session-only and separate from the daily
+calendar. The difficulty chooser pauses the timer; auto-update snapshots include the current level.
+Smart hints still explain their supported deductions and can report that no deduction was found on
+harder boards; Reveal move remains available at every level.
 
 ## Night play and controls
 
@@ -207,12 +254,13 @@ reduced-motion setting, this becomes a stationary highlight.
 - **Pipes:** tap to rotate clockwise.
 - **Atoms:** tap midway between two atoms to cycle no bond → one line → two lines. With a keyboard,
   select an atom with arrows, then Shift + an arrow cycles its bond.
-- **Regional Queens:** click or tap to mark a large X, or drag across cells to paint Xs.
+- **Regional Queens:** click or tap to mark a large X. Drag to toggle each cell once per stroke:
+  empty cells become Xs, and Xs clear. Crossing a cell again in the same stroke leaves it unchanged.
   Double-click or double-tap to place a queen. Tap a mark to clear it. Dragging preserves queens and
   is undone as one action. With a keyboard, arrows select and Space cycles the marks.
 - **Sets:** tap three cards to check them, tap again to deselect. Find three distinct trios; cards
   can be reused. Keys 1–8 toggle cards, arrows move focus, Space selects, Backspace clears selection.
-- **Balance / Mosaic (hidden):** tap to cycle an editable cell’s three states. Mosaic’s numbered squares have
+- **Balance / Mosaic:** tap to cycle an editable cell’s three states. Mosaic’s numbered squares have
   fixed shading; only the unnumbered squares are editable. It finishes when shaded squares satisfy
   every clue; empty marks are optional. Mosaic clues turn red for excess shading, or for too little
   shading once their whole neighborhood is decided. Untouched areas stay neutral; edges count only
@@ -228,6 +276,8 @@ reduced-motion setting, this becomes a stationary highlight.
 - **Five Cells:** tap an internal grid edge to add/remove a border. Drag along grid lines to draw or
   erase several borders as one undoable action. The outer frame is fixed. With a keyboard, arrows
   select a cell and Shift + an arrow toggles its shared border. Groups of five gain a tint.
+- **Akari:** tap a white square to cycle bulb → X note → empty, or select with arrows and press
+  Space. Black squares are fixed. Bulbs light their row and column until a wall; Xs are optional.
 - **All puzzles:** `U` or Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. Escape pauses. Arrows select
   cells and Space activates them. Tab cycles menu controls; Enter activates the focused control.
   Wheel or touch-drag scrolls the collection.
@@ -289,6 +339,7 @@ port; Compose's published port must match if you change it.
 - `src/main.ts`: Phaser scenes, responsive engine UI, input, themes, and timers.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
 - `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
+- `src/akari.ts`: Akari generation, uniqueness solver, lighting, conflicts, and rule validation.
 - `src/input.ts`: Sudoku note cleanup and Queens tap/double-tap and drag gesture state.
 - `src/hints.ts`: local deductions and one-move reveals with preview explanations.
 - `src/tutorial-boards.json`: fixed finished teaching boards, independent of playable puzzles.
@@ -309,7 +360,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **54 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **73 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
@@ -319,7 +370,7 @@ games. Tutorial and smart-hint tests prevent access to hidden puzzle solutions. 
 sound deductions against valid completions, explicit correction previews, and progressive reveals
 for every game. Mosaic save migration preserves existing marks and elapsed time.
 
-Browser checks cover all twelve tutorials at phone, landscape, and desktop sizes; first visits,
+Browser checks cover tutorials at phone, landscape, and desktop sizes; first visits,
 replay, daily/practice flags, paused time, and unchanged puzzle progress. Input checks include
 Sudoku multi-cell notes and single-note double taps, disabled completed digits, undo/redo, touch
 feedback, and saved daily completion. Hint checks cover both modes, preview isolation, paused time,

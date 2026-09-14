@@ -1,4 +1,10 @@
 import { ScrollMomentum } from "./scroll.ts";
+import { akariLights, AKARI_WHITE } from "./akari.ts";
+import {
+  dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, DIFFICULTY_START,
+  DifficultyChoices, type DifficultyChoice, isDifficulty, supportsDifficulty,
+} from "./difficulty.ts";
+import { QUEENS_SIZES } from "./queens-difficulty.ts";
 import { ACTION_ICONS, drawActionIcon } from "./icons.ts";
 import { cardAttributes, cardDescription, findSets, SET_ATTRIBUTES } from "./sets.ts";
 import Phaser from "phaser";
@@ -32,7 +38,7 @@ import {
 } from "./storage.ts";
 
 type Page = "today" | "calendar" | "practice" | "game";
-type Modal = "help" | "pause" | "reset" | "settings" | "install" | "tutorial" | "hint" | null;
+type Modal = "help" | "pause" | "reset" | "settings" | "install" | "tutorial" | "hint" | "difficulty" | null;
 const LIGHT = {
   bg: 0xf6f5ef,
   panel: 0xfdfcf8,
@@ -74,6 +80,7 @@ try {
   } as unknown as Storage;
 }
 const store = new ProgressStore(browserStorage);
+const difficultyChoices = new DifficultyChoices(browserStorage, (kind, seed) => !!store.get(seed, kind));
 const tutorials = new TutorialStore(browserStorage);
 let savedSettings: { night?: boolean; timer?: boolean } = {};
 try {
@@ -87,6 +94,7 @@ class Daybook extends Phaser.Scene {
   night = savedSettings?.night ?? (new Date().getHours() >= 19 || new Date().getHours() < 7);
   showTimer = savedSettings?.timer ?? true;
   modal: Modal = null;
+  difficultyTarget?: { kind: Kind; seed: string; choice: DifficultyChoice };
   settingsReturn: "tutorial" | "hint" | null = null;
   helpPage = 0;
   tutorialPage = 0;
@@ -162,6 +170,7 @@ class Daybook extends Phaser.Scene {
       try {
         sessionStorage.setItem("daybook:update-resume:v1", JSON.stringify({
           kind: this.puzzle.kind, seed: this.puzzle.seed, progress: this.progress,
+          difficulty: this.puzzle.difficulty ?? "classic",
         }));
       } catch {
         // Do not discard a running puzzle if this device cannot save its reload snapshot.
@@ -345,16 +354,18 @@ class Daybook extends Phaser.Scene {
       const saved = JSON.parse(raw);
       if (!KINDS.includes(saved.kind) || typeof saved.seed !== "string" || saved.seed.length > 200 ||
         !(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(saved.seed) || saved.seed.startsWith("practice:"))) return;
+      const choice = isDifficulty(saved.difficulty) ? saved.difficulty : "classic";
+      const difficulty = choice === "classic" ? undefined : choice;
       // ProgressStore validates entries and reapplies any new fixed clues before rendering.
       if (saved.progress && (saved.seed.startsWith("practice:") || !store.available)) {
         const temporary = new ProgressStore({
-          getItem: () => JSON.stringify({ [`${saved.seed}/${saved.kind}`]: saved.progress }),
+          getItem: () => JSON.stringify({ [store.key(saved.seed, saved.kind, difficulty)]: saved.progress }),
           setItem: () => {},
         });
-        const progress = temporary.get(saved.seed, saved.kind);
-        if (progress) store.save(saved.seed, saved.kind, progress);
+        const progress = temporary.get(saved.seed, saved.kind, difficulty);
+        if (progress) store.save(saved.seed, saved.kind, progress, difficulty);
       }
-      this.openGame(saved.kind, saved.seed);
+      this.openGame(saved.kind, saved.seed, choice);
     } catch { /* A damaged or unavailable snapshot should not prevent the app from opening. */ }
   }
   override update(_time: number, delta: number) {
@@ -421,7 +432,7 @@ class Daybook extends Phaser.Scene {
     }
   }
   persist() {
-    if (this.puzzle && this.progress) store.save(this.puzzle.seed, this.puzzle.kind, this.progress);
+    if (this.puzzle && this.progress) store.save(this.puzzle.seed, this.puzzle.kind, this.progress, this.puzzle.difficulty);
   }
   settings() {
     try {
@@ -811,7 +822,7 @@ class Daybook extends Phaser.Scene {
       const x = m + (i % cols) * (cw + gap),
         y = gridY + Math.floor(i / cols) * (ch + gap),
         meta = META[kind],
-        saved = practice ? undefined : store.get(this.selectedDate, kind),
+        saved = practice ? undefined : store.dailyProgress(this.selectedDate, kind),
         done = saved?.completed;
       const card = this.box(
         x,
@@ -855,13 +866,25 @@ class Daybook extends Phaser.Scene {
         cw - 52,
       );
       this.text(x + cw - 23, by - 2, done ? "✓" : "↗", 16, this.tint(kind)).setOrigin(.5, 0);
+      if (supportsDifficulty(kind)) {
+        const choice = difficultyChoices.get(kind, practice ? "practice:" : this.selectedDate)!;
+        this.text(x + 16, y + ch - 25, practice ? "Choose difficulty" :
+          `${choice === (dailyDifficulty(kind, this.selectedDate) ?? "classic") ? "Daily" : "Chosen"} · ${DIFFICULTY_LABELS[choice]}`,
+          12, c.accent, undefined, cw - 32);
+      } else if (practice && (kind === "fivecells" || kind === "mosaic")) {
+        this.text(x + 16, y + ch - 25, "Practice only", 12, c.accent, undefined, cw - 32);
+      }
       this.hit(
         x,
         y,
         cw,
         ch,
         `${meta.name}${done ? ", completed" : ""}`,
-        () => this.openGame(kind, practice ? `practice:${crypto.randomUUID()}` : this.selectedDate),
+        () => {
+          const seed = practice ? `practice:${crypto.randomUUID()}` : this.selectedDate;
+          if (practice && supportsDifficulty(kind)) this.openDifficulty(kind, seed);
+          else this.openGame(kind, seed);
+        },
         card,
       );
     });
@@ -964,6 +987,10 @@ class Daybook extends Phaser.Scene {
         this.text(a, b, [3, 2, 3, 2][i].toString(), 12, color).setOrigin(.5);
       });
     } else if (kind === "queens") this.queen(cx, cy + 3, s * .68, color);
+    else if (kind === "akari") {
+      this.box(x + 2, y + 2, s - 4, s - 4, this.pale(kind), undefined, 0);
+      this.akariBulb(cx, cy, s, color);
+    }
     else if (kind === "shikaku") {
       g.strokeRoundedRect(x + 2, y + 3, 60, 58, 2).lineBetween(x + 23, y + 3, x + 23, y + 61)
         .lineBetween(x + 23, y + 24, x + 62, y + 24).lineBetween(x + 42, y + 24, x + 42, y + 61);
@@ -1197,7 +1224,7 @@ class Daybook extends Phaser.Scene {
       });
     this.contentHeight = this.H;
   }
-  openGame(kind: Kind, seed: string) {
+  openGame(kind: Kind, seed: string, choice = difficultyChoices.get(kind, seed)) {
     this.queensInput.reset();
     this.sudokuTap = undefined;
     this.pointerStart = this.boardPointerId = -1;
@@ -1205,8 +1232,9 @@ class Daybook extends Phaser.Scene {
     this.notice = "";
     this.reviewSet = -1;
     try {
-      this.puzzle = generate(kind, seed);
+      this.puzzle = generate(kind, seed, choice === "classic" ? undefined : choice);
       this.progress = store.load(this.puzzle);
+      if (choice) difficultyChoices.set(kind, seed, choice);
     } catch (error) {
       console.error(error);
       this.notice = "This puzzle could not load. Please choose another day.";
@@ -1214,6 +1242,7 @@ class Daybook extends Phaser.Scene {
       return;
     }
     this.page = "game";
+    if (!seed.startsWith("practice:")) this.selectedDate = seed;
     this.modal = null;
     this.selected = -1;
     this.selectedCells.clear();
@@ -1227,7 +1256,14 @@ class Daybook extends Phaser.Scene {
       return;
     }
     this.draw();
-    this.announce(`${META[kind].name}. ${META[kind].rules.join(" ")}`);
+    this.announce(`${META[kind].name}${choice ? `, ${DIFFICULTY_LABELS[choice]}` : ""}. ${META[kind].rules.join(" ")}`);
+  }
+  openDifficulty(kind: Kind, seed: string) {
+    this.persist();
+    const choice = difficultyChoices.get(kind, seed)!;
+    this.difficultyTarget = { kind, seed, choice: seed.startsWith("practice:") && choice === "classic" ? "medium" : choice };
+    this.modal = "difficulty";
+    this.draw();
   }
   startTutorial() {
     if (!this.puzzle || !this.progress) return;
@@ -1342,7 +1378,8 @@ class Daybook extends Phaser.Scene {
     const size = layout.size;
     const bx = layout.bx;
     const by = top;
-    const cardY = wide ? layout.landscape && layout.compact ? top + 66 : top : by + size + gap + legendHeight;
+    const cardY = wide ? layout.landscape && layout.compact
+      ? top + 66 + (supportsDifficulty(p.kind) ? 44 : 0) : top : by + size + gap + legendHeight;
 
     this.board = { x: bx, y: by, cell: size / n, n };
     // Render fixed examples through the same board renderer, restoring all player state synchronously.
@@ -1455,11 +1492,12 @@ class Daybook extends Phaser.Scene {
     }));
   }
   puzzleLayout() {
-    const compact = this.W < 760, landscape = this.W > this.H, short = this.H < 720;
+    const compact = this.W < 760 || this.H < 480, landscape = this.W > this.H, short = this.H < 720;
     const notePuzzle = this.puzzle!.kind === "sudoku" || this.puzzle!.kind === "killer";
     const m = compact ? this.mobile ? 12 : this.margin : Math.max(24, (this.W - 1120) / 2);
     const w = this.W - m * 2, headerTop = compact || short ? 8 : 19;
-    const by = compact ? landscape ? 76 : this.H < 700 ? 132 : 164 : short ? 166 : 196;
+    const identityBy = compact ? landscape ? 76 : this.H < 700 ? 132 : 164 : short ? 166 : 196;
+    const by = identityBy + (compact && !landscape && supportsDifficulty(this.puzzle!.kind) ? 44 : 0);
     const gap = Phaser.Math.Clamp(w * .035, 20, 40), buttonSize = short ? 44 : 52;
     const footer = compact ? this.progress!.completed ? 132 : notePuzzle ? 174 : 124
       : (notePuzzle ? 54 : 0) + buttonSize * 2 + 46 + (this.notice ? 48 : 0);
@@ -1471,7 +1509,7 @@ class Daybook extends Phaser.Scene {
     const bx = compact && !landscape ? (this.W - size) / 2 : m;
     const titleX = compact && landscape ? bx + size + 22 : m;
     const titleWidth = this.W - m - titleX;
-    const titleY = compact ? landscape ? by : by - 66 : short ? 82 : 108;
+    const titleY = compact ? landscape ? by : identityBy - 66 : short ? 82 : 108;
     return { compact, landscape, m, w, headerTop, by, size, bx, titleX, titleWidth, titleY, gap, buttonSize };
   }
   drawPuzzleIdentity(layout: ReturnType<Daybook["puzzleLayout"]>) {
@@ -1492,6 +1530,12 @@ class Daybook extends Phaser.Scene {
     const heading = this.text(x, y + (compact ? 21 : 25), META[p.kind].name,
       compact ? landscape ? 26 : 30 : 40, c.ink, "Georgia");
     if (compact && heading.width > w) heading.setScale(w / heading.width);
+    if (supportsDifficulty(p.kind)) {
+      const label = `${DIFFICULTY_LABELS[p.difficulty ?? "classic"]} · Change`;
+      const dx = compact ? x : x + w - 160, dy = compact ? y + 60 : y + 27;
+      this.button(dx, dy, compact ? Math.min(w, 190) : 160, 40, label,
+        () => this.openDifficulty(p.kind, p.seed), false, !!this.modal, 0).setFontSize(14);
+    }
   }
   drawPuzzleHeader(m: number, top: number, fixed = false) {
     const before = new Set(this.children.getAll()), controlStart = this.controls.length;
@@ -1533,14 +1577,14 @@ class Daybook extends Phaser.Scene {
     this.board = { x: bx, y: by, cell: size / p.size, n: p.size };
     this.drawPuzzleIdentity(layout);
     this.drawBoard();
-    const controlsY = landscape ? titleY + 66 : by + size + 10;
+    const controlsY = landscape ? titleY + 66 + (supportsDifficulty(p.kind) ? 44 : 0) : by + size + 10;
     if (progress.completed) {
       this.text(ux, controlsY, `${META[p.kind].name} completed`, 18, c.accent);
-      const remaining = kindsForDate(p.seed).find((kind) => !store.get(p.seed, kind)?.completed);
+      const remaining = kindsForDate(p.seed).find((kind) => !store.dailyProgress(p.seed, kind)?.completed);
       this.button(ux, controlsY + 30, uw, 42,
         practice ? "Another of these" : remaining ? `Next: ${META[remaining].name}` : "The day is complete",
         () => {
-          if (practice) this.openGame(p.kind, `practice:${crypto.randomUUID()}`);
+          if (practice) this.openGame(p.kind, `practice:${crypto.randomUUID()}`, p.difficulty);
           else if (remaining) this.openGame(remaining, p.seed);
           else this.go("today");
         }, true, false, 0);
@@ -1576,7 +1620,7 @@ class Daybook extends Phaser.Scene {
   drawGame() {
     if (!this.puzzle || !this.progress) return;
     // Keep the rules visible whenever both columns have room. No intermediate sidebar layout.
-    if (this.W < 760) { this.drawCompactGame(); return; }
+    if (this.W < 760 || this.H < 480) { this.drawCompactGame(); return; }
     const p = this.puzzle, progress = this.progress, c = this.C;
     const short = this.H < 720;
     const layout = this.puzzleLayout();
@@ -1748,6 +1792,41 @@ class Daybook extends Phaser.Scene {
     } else this.announce(`Card ${i + 1}: ${cardDescription(this.puzzle!.clues[i])}. ${this.selectedCells.size} of 3 selected.`);
     this.draw();
   }
+  akariBulb(x: number, y: number, s: number, color: number) {
+    const g = this.add.graphics().lineStyle(Math.max(1.5, s * .035), color);
+    g.fillStyle(color, .18).fillCircle(x, y - s * .045, s * .19);
+    g.strokeCircle(x, y - s * .045, s * .19);
+    g.lineBetween(x - s * .09, y + s * .15, x - s * .09, y + s * .24);
+    g.lineBetween(x + s * .09, y + s * .15, x + s * .09, y + s * .24);
+    g.lineBetween(x - s * .09, y + s * .24, x + s * .09, y + s * .24);
+    g.lineBetween(x - s * .055, y + s * .3, x + s * .055, y + s * .3);
+    for (const [dx, dy] of [[0, -1], [-1, -.5], [1, -.5]]) {
+      g.lineBetween(x + dx * s * .28, y + dy * s * .28 - s * .045,
+        x + dx * s * .36, y + dy * s * .36 - s * .045);
+    }
+  }
+  drawAkari() {
+    const p = this.puzzle!, a = this.progress!.values, c = this.C;
+    const { x, y, cell: s } = this.board, n = p.size;
+    const { lit, conflicts } = akariLights(p.clues, a, n);
+    for (let i = 0; i < n * n; i++) {
+      const xx = x + i % n * s, yy = y + Math.floor(i / n) * s;
+      const white = p.clues[i] === AKARI_WHITE;
+      const fill = white ? lit[i] ? this.night ? 0x49432b : 0xf3e8bd : c.panel : this.night ? 0x101815 : 0x343b34;
+      this.box(xx, yy, s, s, fill, c.line, 0);
+      if (!white && p.clues[i] >= 0) {
+        this.text(xx + s / 2, yy + s / 2, String(p.clues[i]), s * .42,
+          conflicts.has(i) ? this.night ? 0xffb5a0 : 0xffb49e : 0xf5f0dc).setOrigin(.5);
+      } else if (white && a[i] === 1) {
+        this.akariBulb(xx + s / 2, yy + s / 2, s, conflicts.has(i) ? c.error : this.tint("akari"));
+      } else if (white && a[i] === 2) {
+        const g = this.add.graphics().lineStyle(Math.max(1.5, s * .035), c.muted);
+        g.lineBetween(xx + s * .37, yy + s * .37, xx + s * .63, yy + s * .63);
+        g.lineBetween(xx + s * .63, yy + s * .37, xx + s * .37, yy + s * .63);
+      }
+      if (this.selected === i) this.add.graphics().lineStyle(2, c.accent).strokeRect(xx + 2, yy + 2, s - 4, s - 4);
+    }
+  }
   drawBoard() {
     const p = this.puzzle!,
       state = this.progress!,
@@ -1765,9 +1844,13 @@ class Daybook extends Phaser.Scene {
       this.add.graphics().setName("atoms-border").lineStyle(1, c.line).strokeRect(x, y, size, size);
       return;
     }
+    if (p.kind === "akari") {
+      this.drawAkari();
+      return;
+    }
     const regions = this.night
-      ? [0x4c3d55, 0x334e3c, 0x514931, 0x314b52, 0x553d34, 0x3b415b, 0x464f2f]
-      : [0xe9dfed, 0xdbe7dc, 0xede5cd, 0xd8e6e8, 0xeedcd5, 0xdfe1ee, 0xdfe5bd];
+      ? [0x4c3d55, 0x334e3c, 0x514931, 0x314b52, 0x553d34, 0x3b415b, 0x464f2f, 0x553b49]
+      : [0xe9dfed, 0xdbe7dc, 0xede5cd, 0xd8e6e8, 0xeedcd5, 0xdfe1ee, 0xdfe5bd, 0xeddce5];
     const activeRegion = p.kind === "shikaku" && this.selected >= 0
       ? rectangle(this.pointerStart >= 0 ? this.pointerStart : this.selected, this.selected, n)
       : [];
@@ -2266,7 +2349,8 @@ class Daybook extends Phaser.Scene {
     if (
       p.kind === "fivecells" || (p.kind === "dosun" && p.regions[i] < 0) ||
       (p.kind === "nurikabe" && p.clues[i] > 0) ||
-      (p.kind === "mosaic" && p.initial[i] > 0)
+      (p.kind === "mosaic" && p.initial[i] > 0) ||
+      (p.kind === "akari" && p.clues[i] !== AKARI_WHITE)
     ) {
       this.draw();
       return;
@@ -2564,7 +2648,7 @@ class Daybook extends Phaser.Scene {
   drawCompletion(x: number, y: number, w: number) {
     const p = this.puzzle!, c = this.C, pad = 20;
     const practice = p.seed.startsWith("practice:");
-    const remaining = kindsForDate(p.seed).find((kind) => !store.get(p.seed, kind)?.completed);
+    const remaining = kindsForDate(p.seed).find((kind) => !store.dailyProgress(p.seed, kind)?.completed);
     const background = this.box(x, y, w, 1, c.panel, c.line, 0);
     const title = this.text(
       x + pad,
@@ -2596,7 +2680,7 @@ class Daybook extends Phaser.Scene {
         ? `Next: ${META[remaining].name}`
         : "The day is complete",
       () => {
-        if (practice) this.openGame(p.kind, `practice:${crypto.randomUUID()}`);
+        if (practice) this.openGame(p.kind, `practice:${crypto.randomUUID()}`, p.difficulty);
         else if (remaining) this.openGame(remaining, p.seed);
         else this.go("today");
       },
@@ -2718,7 +2802,63 @@ class Daybook extends Phaser.Scene {
       }, true);
     } else this.button(x + pad, y + h - 60, w - pad * 2, 40, "Got it", close, true);
   }
+  drawDifficulty() {
+    const target = this.difficultyTarget!;
+    const practice = target.seed.startsWith("practice:"), short = this.H < 480;
+    const original = !practice && (target.seed < DIFFICULTY_START || !!store.get(target.seed, target.kind));
+    const c = this.C, w = Math.min(this.W - 24, 460), pad = short ? 16 : 24;
+    const h = short ? original ? 296 : 252 : original ? 410 : 354;
+    const x = (this.W - w) / 2, y = (this.H - h) / 2, inner = w - pad * 2;
+    const pick = dailyDifficulty(target.kind, target.seed) ?? "classic";
+    const level = target.choice, difficulty = level === "classic" ? undefined : level;
+    const saved = store.get(target.seed, target.kind, difficulty);
+    this.controls = [];
+    this.focused = -1;
+    this.add.rectangle(0, 0, this.W, this.H, c.bg, .96).setOrigin(0).setInteractive();
+    this.box(x, y, w, h, c.panel, c.line, 0);
+    this.text(x + pad, y + (short ? 14 : 24), "Choose difficulty", short ? 23 : 27, c.ink, "Georgia", inner);
+    this.text(x + pad, y + (short ? 50 : 70), practice ? "Regional Queens · practice" :
+      `Daily pick: ${DIFFICULTY_LABELS[pick]} · ${target.seed}`, short ? 13 : 14, c.muted, undefined, inner);
+    const optionsY = y + (short ? 82 : 112), bw = (inner - 12) / 3;
+    DIFFICULTIES.forEach((choice, i) => {
+      this.button(x + pad + i * (bw + 6), optionsY, bw, 44, DIFFICULTY_LABELS[choice], () => {
+        target.choice = choice; this.draw();
+      }, level === choice, false, 0).setFontSize(16);
+    });
+    if (!short) {
+      const description = level === "classic" ? "The original daily board, with your existing progress." :
+        `${QUEENS_SIZES[level]} × ${QUEENS_SIZES[level]} · ` + {
+          easy: "Find the only available square.",
+          medium: "Combine row, column, and region exclusions.",
+          hard: "Test candidates and follow their consequences.",
+        }[level];
+      this.text(x + pad, optionsY + 58, description, 14, c.muted, undefined, inner);
+    }
+    const status = saved?.completed ? "Completed at this level." : saved && saved.elapsed > 0 ?
+      `In progress · ${formatTime(saved.elapsed)}` : practice ? "A fresh puzzle at your chosen level." : "Any level completes Queens for this day.";
+    this.text(x + pad, y + (short ? 140 : 226), status, 14, c.accent, undefined, inner);
+    if (original) {
+      this.button(x + pad, y + (short ? 184 : 266), inner, 40, "Original daily board", () => {
+        target.choice = "classic"; this.draw();
+      }, level === "classic", false, 0).setFontSize(14);
+    }
+    const buttonY = y + h - 60, buttonW = (inner - 10) / 2;
+    this.button(x + pad, buttonY, buttonW, 44, "Back", () => {
+      this.modal = null; this.draw();
+    }, false, false, 0);
+    this.button(x + pad + buttonW + 10, buttonY, buttonW, 44,
+      saved?.completed ? "View puzzle" : saved && saved.elapsed > 0 ? "Continue" : "Play", () => {
+        if (this.page === "game" && this.puzzle?.kind === target.kind && this.puzzle.seed === target.seed &&
+          this.puzzle.difficulty === difficulty) {
+          this.modal = null; this.draw();
+        } else this.openGame(target.kind, target.seed, level);
+      }, true, false, 0);
+  }
   drawModal() {
+    if (this.modal === "difficulty") {
+      this.drawDifficulty();
+      return;
+    }
     if (this.modal === "install") {
       this.drawInstall();
       return;

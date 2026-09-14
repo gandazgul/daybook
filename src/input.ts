@@ -101,14 +101,14 @@ export class QueensInput {
     if (this.start < 0 || this.double || index === this.last) return [];
     const marks: Mark[] = [];
     if (!this.dragged) {
-      // A drag always paints Xs; starting on a queen preserves that queen.
-      marks.push({ index: this.start, value: this.original === 1 ? 1 : 2 });
+      // begin already toggled the starting cell. Restore it only if it was a queen.
+      if (this.original === 1) marks.push({ index: this.start, value: 1 });
       this.dragged = true;
     }
     for (const cell of gridLine(this.last, index, size)) {
       if (this.visited.has(cell)) continue;
       this.visited.add(cell);
-      if (values[cell] !== 1) marks.push({ index: cell, value: 2 });
+      if (values[cell] !== 1) marks.push({ index: cell, value: values[cell] === 2 ? 0 : 2 });
     }
     this.last = index;
     return marks;
