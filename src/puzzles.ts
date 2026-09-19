@@ -663,47 +663,120 @@ export function countShikaku(clues: number[], n: number, limit = 2): number {
   visit(options.map((_, i) => i));
   return count;
 }
+// Pack rectangles directly: recursive splitting always leaves a full-board seam.
+function staggeredShikakuPartition(n: number, rng: Random): number[][] | null {
+  const regions = Array(n * n).fill(0), rects: number[][] = [];
+  let budget = 1000;
+  const visit = (fillerCells: number, hasNine: boolean): boolean => {
+    if (--budget < 0) return false;
+    const start = regions.indexOf(0);
+    if (start < 0) {
+      for (let k = 1; k < n; k++) {
+        let verticalSeam = true, horizontalSeam = true;
+        for (let j = 0; j < n; j++) {
+          if (regions[j * n + k - 1] === regions[j * n + k]) verticalSeam = false;
+          if (regions[(k - 1) * n + j] === regions[k * n + j]) horizontalSeam = false;
+        }
+        if (verticalSeam || horizontalSeam) return false;
+      }
+      return true;
+    }
+    const row = start / n | 0, col = start % n;
+    const choices: { cells: number[]; filler: number; rank: number }[] = [];
+    for (let h = 1; h <= n - row; h++) {
+      for (let w = 1; w <= n - col; w++) {
+        const area = w * h, block = w > 1 && h > 1, filler = block ? 0 : area;
+        if (
+          area < 2 || area > 9 || (area === 9 && hasNine) || filler > 3 ||
+          fillerCells + filler > n * n * 0.25
+        ) {
+          continue;
+        }
+        const cells = rectangle(start, (row + h - 1) * n + col + w - 1, n);
+        if (cells.some((i) => regions[i])) continue;
+        // Weighted random ordering favors blocks but can backtrack to small fillers.
+        const rank = -Math.log(Math.max(1e-9, rng.next())) / (block ? 5 : 1);
+        choices.push({ cells, filler, rank });
+      }
+    }
+    choices.sort((a, b) => a.rank - b.rank);
+    for (const { cells, filler } of choices) {
+      cells.forEach((i) => regions[i] = rects.length + 1);
+      let valid = true;
+      // Four different regions around a vertex form the aligned cross we avoid.
+      for (let y = 1; y < n && valid; y++) {
+        for (let x = 1; x < n; x++) {
+          const i = y * n + x;
+          const corners = [regions[i], regions[i - 1], regions[i - n], regions[i - n - 1]];
+          if (corners.every(Boolean) && new Set(corners).size === 4) {
+            valid = false;
+            break;
+          }
+        }
+      }
+      if (valid) {
+        rects.push(cells);
+        if (visit(fillerCells + filler, hasNine || cells.length === 9)) return true;
+        rects.pop();
+      }
+      cells.forEach((i) => regions[i] = 0);
+      if (budget <= 0) return false;
+    }
+    return false;
+  };
+  return visit(0, false) ? rects : null;
+}
+function generateStaggeredShikaku(p: Puzzle, rng: Random) {
+  const n = p.size;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const rects = staggeredShikakuPartition(n, rng);
+    if (!rects) continue;
+    for (let placement = 0; placement < 10; placement++) {
+      const clues = Array(n * n).fill(0);
+      rects.forEach((cells) => clues[rng.pick(cells)] = cells.length);
+      if (
+        shikakuOptions(clues, n).filter((options) => options.length > 1).length <
+          Math.ceil(rects.length / 2) || countShikaku(clues, n) !== 1
+      ) continue;
+      p.clues = clues;
+      p.solution = Array(n * n).fill(0);
+      rects.forEach((cells, i) => cells.forEach((c) => p.solution[c] = i + 1));
+      return;
+    }
+  }
+  // Solver-verified staggered fallback: five blocks and two two-cell fillers.
+  if (n !== 6) throw new Error("Shikaku fallback requires a 6 × 6 board");
+  p.clues = [
+    [0, 0, 0, 0, 0, 0],
+    [0, 8, 0, 0, 0, 0],
+    [0, 0, 0, 4, 0, 8],
+    [0, 6, 0, 0, 0, 0],
+    [0, 0, 0, 0, 6, 0],
+    [2, 0, 0, 0, 0, 2],
+  ].flat();
+  p.solution = [
+    [1, 1, 1, 1, 2, 2],
+    [1, 1, 1, 1, 2, 2],
+    [3, 3, 4, 4, 2, 2],
+    [3, 3, 4, 4, 2, 2],
+    [3, 3, 5, 5, 5, 6],
+    [7, 7, 5, 5, 5, 6],
+  ].flat();
+}
 export function generateShikaku(
   p: Puzzle,
   rng: Random,
   allowTrivial = false,
   preferBlocks = !allowTrivial,
 ) {
+  if (preferBlocks) {
+    generateStaggeredShikaku(p, rng);
+    return;
+  }
   const n = p.size;
   for (let attempt = 0; attempt < 500; attempt++) {
     const rects: number[][] = [];
     const split = (x: number, y: number, w: number, h: number) => {
-      if (preferBlocks) {
-        const area = w * h, block = w > 1 && h > 1;
-        if (
-          (block && area <= 9 && (area <= 6 || rng.next() < 0.7)) ||
-          (!block && area <= 3)
-        ) {
-          rects.push(rectangle(y * n + x, (y + h - 1) * n + x + w - 1, n));
-          return;
-        }
-        // Prefer cuts that leave two substantial rectangles. Edge cuts remain
-        // possible, giving small strips a supporting role in the partition.
-        const cuts: { vertical: boolean; k: number; weight: number }[] = [];
-        for (const vertical of [true, false]) {
-          const length = vertical ? w : h, breadth = vertical ? h : w;
-          for (let k = 1; k < length; k++) {
-            if (k * breadth === 1 || (length - k) * breadth === 1) continue;
-            const thin = breadth === 1 || k === 1 || length - k === 1;
-            cuts.push({ vertical, k, weight: thin ? 0.1 : 1 });
-          }
-        }
-        let choice = rng.next() * cuts.reduce((sum, cut) => sum + cut.weight, 0);
-        const cut = cuts.find((cut) => (choice -= cut.weight) < 0) ?? cuts[cuts.length - 1];
-        if (cut.vertical) {
-          split(x, y, cut.k, h);
-          split(x + cut.k, y, w - cut.k, h);
-        } else {
-          split(x, y, w, cut.k);
-          split(x, y + cut.k, w, h - cut.k);
-        }
-        return;
-      }
       if (w * h <= 6 && (w * h <= 3 || rng.next() < 0.6)) {
         rects.push(rectangle(y * n + x, (y + h - 1) * n + x + w - 1, n));
         return;
@@ -719,18 +792,6 @@ export function generateShikaku(
       }
     };
     split(0, 0, n, n);
-    if (preferBlocks) {
-      const blocks = rects.filter((cells) => {
-        const first = cells[0], last = cells[cells.length - 1];
-        return first % n !== last % n && (first / n | 0) !== (last / n | 0);
-      });
-      // Substantial rectangles should carry the puzzle; strips only fill gaps.
-      if (
-        blocks.length < 3 || blocks.reduce((sum, cells) => sum + cells.length, 0) < n * n * 0.75
-      ) {
-        continue;
-      }
-    }
     const clues = Array(n * n).fill(0);
     rects.forEach((cells) => clues[rng.pick(cells)] = cells.length);
     if (
@@ -743,27 +804,6 @@ export function generateShikaku(
       rects.forEach((cells, i) => cells.forEach((c) => p.solution[c] = i + 1));
       return;
     }
-  }
-  if (preferBlocks) {
-    // Solver-verified fallback: four blocks and two small fillers, no singletons.
-    if (n !== 6) throw new Error("Shikaku fallback requires a 6 × 6 board");
-    p.clues = [
-      [0, 0, 0, 0, 0, 0],
-      [0, 0, 8, 0, 0, 0],
-      [0, 6, 0, 2, 2, 0],
-      [0, 0, 0, 0, 0, 0],
-      [0, 0, 0, 0, 0, 0],
-      [9, 0, 0, 0, 9, 0],
-    ].flat();
-    p.solution = [
-      [1, 1, 2, 2, 2, 2],
-      [1, 1, 2, 2, 2, 2],
-      [1, 1, 3, 3, 4, 4],
-      [5, 5, 5, 6, 6, 6],
-      [5, 5, 5, 6, 6, 6],
-      [5, 5, 5, 6, 6, 6],
-    ].flat();
-    return;
   }
   if (!allowTrivial) {
     // Independently generated and solver-verified: neighboring rectangles constrain

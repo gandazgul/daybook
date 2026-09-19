@@ -79,18 +79,42 @@ class HighRandom extends Random {
   }
 }
 function assertShikakuBlocks(p: Puzzle) {
-  let blockCells = 0;
+  let blockCells = 0, nineBlocks = 0;
   for (const region of new Set(p.solution)) {
     const cells = p.solution.flatMap((value, i) => value === region ? [i] : []);
     const width = new Set(cells.map((i) => i % p.size)).size;
     const height = new Set(cells.map((i) => i / p.size | 0)).size;
     assert(cells.length >= 2 && cells.length <= 9, `${p.seed}: rectangle area outside 2–9`);
+    if (cells.length === 9) nineBlocks++;
     if (width > 1 && height > 1) blockCells += cells.length;
     else assert(cells.length <= 3, `${p.seed}: long strip instead of a small filler`);
   }
   assert(blockCells >= p.size ** 2 * 0.75, `${p.seed}: blocks cover less than 75% of the board`);
+  assert(nineBlocks <= 1, `${p.seed}: more than one nine-cell block`);
 }
-Deno.test("Shikaku favors blocks of up to nine cells with no singletons across 500 boards", () => {
+function assertShikakuStaggered(p: Puzzle) {
+  const n = p.size, a = p.solution;
+  for (let y = 1; y < n; y++) {
+    for (let x = 1; x < n; x++) {
+      const i = y * n + x;
+      assert(
+        new Set([a[i], a[i - 1], a[i - n], a[i - n - 1]]).size < 4,
+        `${p.seed}: four rectangles meet at (${x}, ${y})`,
+      );
+    }
+  }
+  for (let k = 1; k < n; k++) {
+    // A rectangle must straddle every horizontal and vertical grid division.
+    const cells = Array.from({ length: n }, (_, j) => j);
+    assert(cells.some((j) => a[k * n + j] === a[(k - 1) * n + j]), `${p.seed}: horizontal seam`);
+    assert(cells.some((j) => a[j * n + k] === a[j * n + k - 1]), `${p.seed}: vertical seam`);
+  }
+  assert(
+    ambiguousClues(p) >= Math.ceil(p.clues.filter(Boolean).length / 2),
+    `${p.seed}: too many individually forced clues`,
+  );
+}
+Deno.test("Shikaku staggers blocks, limits nines and avoids singletons across 500 boards", () => {
   const layouts = new Set<string>();
   const areas = new Set<number>();
   for (let i = 0; i < 250; i++) {
@@ -99,6 +123,7 @@ Deno.test("Shikaku favors blocks of up to nine cells with no singletons across 5
       const p = generate("shikaku", seed);
       assertQuality(p);
       assertShikakuBlocks(p);
+      assertShikakuStaggered(p);
       layouts.add(JSON.stringify(p.solution));
       p.clues.filter(Boolean).forEach((area) => areas.add(area));
       const repeat = structuredClone(p);
@@ -113,12 +138,13 @@ Deno.test("Shikaku favors blocks of up to nine cells with no singletons across 5
   assert(areas.has(9), "nine-cell blocks should be possible");
   assert(areas.has(2) || areas.has(3), "small strip fillers should still be possible");
 });
-Deno.test("Shikaku block fallback obeys shape limits even with constant random values", () => {
+Deno.test("Shikaku staggered fallback obeys shape limits even with constant random values", () => {
   for (const rng of [new ZeroRandom("constant"), new HighRandom("constant")]) {
     const p = structuredClone(generate("shikaku", "block-fallback-template"));
     generateShikaku(p, rng);
     assertQuality(p);
     assertShikakuBlocks(p);
+    assertShikakuStaggered(p);
   }
 });
 Deno.test("quality guards preserve solvability and uniqueness across 1500 daily/practice boards", () => {

@@ -75,8 +75,11 @@ saved progress stay unchanged. Mosaic is available in practice and does not coun
 
 Shikaku practice boards and daily boards from September 20, 2026 favor blocks at least two cells
 wide and tall, covering at least 75% of the grid. Rectangles have 2–9 cells; thin strips are limited
-to two or three cells as fillers, and single-cell regions are excluded. Uniqueness and interacting
-clue checks still apply, including to the bounded fallback. Earlier daily boards stay unchanged.
+to two or three cells as fillers, and single-cell regions are excluded. At most one rectangle has
+nine cells. Layouts are staggered: four rectangles never meet at a corner, and no straight internal
+border spans the board. At least half the clues have multiple candidate rectangles before the other
+clues resolve them, and every puzzle has a unique solution. The bounded fallback meets the same
+checks. Earlier daily boards stay unchanged.
 
 Akari generates 6 × 6 boards with connected lines of light blocked by black squares. Every board has
 one solution and at least four bulbs to find. Generation and clue removal both verify uniqueness;
