@@ -78,6 +78,49 @@ class HighRandom extends Random {
     return .999999;
   }
 }
+function assertShikakuBlocks(p: Puzzle) {
+  let blockCells = 0;
+  for (const region of new Set(p.solution)) {
+    const cells = p.solution.flatMap((value, i) => value === region ? [i] : []);
+    const width = new Set(cells.map((i) => i % p.size)).size;
+    const height = new Set(cells.map((i) => i / p.size | 0)).size;
+    assert(cells.length >= 2 && cells.length <= 9, `${p.seed}: rectangle area outside 2–9`);
+    if (width > 1 && height > 1) blockCells += cells.length;
+    else assert(cells.length <= 3, `${p.seed}: long strip instead of a small filler`);
+  }
+  assert(blockCells >= p.size ** 2 * 0.75, `${p.seed}: blocks cover less than 75% of the board`);
+}
+Deno.test("Shikaku favors blocks of up to nine cells with no singletons across 500 boards", () => {
+  const layouts = new Set<string>();
+  const areas = new Set<number>();
+  for (let i = 0; i < 250; i++) {
+    const date = new Date(Date.UTC(2026, 8, 20 + i)).toISOString().slice(0, 10);
+    for (const seed of [date, `practice:blocks-${i}`]) {
+      const p = generate("shikaku", seed);
+      assertQuality(p);
+      assertShikakuBlocks(p);
+      layouts.add(JSON.stringify(p.solution));
+      p.clues.filter(Boolean).forEach((area) => areas.add(area));
+      const repeat = structuredClone(p);
+      generateShikaku(repeat, new Random(`v${GENERATOR_VERSION}:shikaku:${seed}`));
+      assert(
+        JSON.stringify(p) === JSON.stringify(repeat),
+        `${seed}: generator is not deterministic`,
+      );
+    }
+  }
+  assert(layouts.size >= 100, "block bias collapsed the variety of layouts");
+  assert(areas.has(9), "nine-cell blocks should be possible");
+  assert(areas.has(2) || areas.has(3), "small strip fillers should still be possible");
+});
+Deno.test("Shikaku block fallback obeys shape limits even with constant random values", () => {
+  for (const rng of [new ZeroRandom("constant"), new HighRandom("constant")]) {
+    const p = structuredClone(generate("shikaku", "block-fallback-template"));
+    generateShikaku(p, rng);
+    assertQuality(p);
+    assertShikakuBlocks(p);
+  }
+});
 Deno.test("quality guards preserve solvability and uniqueness across 1500 daily/practice boards", () => {
   for (const kind of ["shikaku", "dosun", "mosaic"] as const) {
     for (let i = 0; i < 250; i++) {
@@ -134,6 +177,8 @@ Deno.test("quality guards preserve published daily layouts and completed progres
     ["shikaku", "2026-09-11", "33402994ed4fe789c070896bc8d1e8d5f48661e21629d0afbfc7e7d201c5cbc4"],
     ["dosun", "2026-09-11", "da140741c122ef861dea2e4fa30af478cef45ab8e6984a544549cde297935b76"],
     ["mosaic", "2026-09-11", "63387e251a6161c0496f937bc414779f01c652a453f6b9359b4dbb23e643375a"],
+    ["shikaku", "2026-09-12", "ce268f8ed83e3cca18cd95b2c03710c38c6c44d2aeafa22eca49015903ee7776"],
+    ["shikaku", "2026-09-19", "c56f59ae9bbbce205b6a43b8d93796796fd5fda8b9179761262f15e4a1139915"],
   ] as const;
   const disk = new Map<string, string>();
   const storage = {

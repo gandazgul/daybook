@@ -105,10 +105,11 @@ export class QueensInput {
       if (this.original === 1) marks.push({ index: this.start, value: 1 });
       this.dragged = true;
     }
+    const value = this.original === 2 ? 0 : 2;
     for (const cell of gridLine(this.last, index, size)) {
       if (this.visited.has(cell)) continue;
       this.visited.add(cell);
-      if (values[cell] !== 1) marks.push({ index: cell, value: values[cell] === 2 ? 0 : 2 });
+      if (values[cell] !== 1 && values[cell] !== value) marks.push({ index: cell, value });
     }
     this.last = index;
     return marks;

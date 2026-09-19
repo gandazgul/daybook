@@ -63,32 +63,36 @@ Deno.test("Queens rapid taps on different cells and expired taps never create a 
   equal(values, [2, 0]);
 });
 
-Deno.test("Queens fast drags toggle mixed cells once, preserve queens and ignore revisits", () => {
+Deno.test("Queens drags starting empty only add Xs, preserve queens and ignore revisits", () => {
   const input = new QueensInput(), values = Array(36).fill(0);
   values[2] = 1;
   values[1] = values[4] = 2;
   apply(values, input.begin(0, values, 0).marks);
   apply(values, input.move(5, values, 6));
-  equal(values.slice(0, 6), [2, 0, 1, 2, 0, 2]);
+  equal(values.slice(0, 6), [2, 2, 1, 2, 2, 2]);
   equal(input.move(0, values, 6), []);
   input.end(0, 90);
   equal(input.begin(0, values, 180).mergeUndo, false);
 });
 
-Deno.test("Queens drags clear a starting X, restore a starting queen and toggle again on a new stroke", () => {
+Deno.test("Queens drags starting on X only erase; starting on a queen preserves it and adds Xs", () => {
   for (const initial of [1, 2]) {
     const input = new QueensInput(), values = Array(36).fill(0);
     values[0] = initial;
     values[6] = 2;
+    values[18] = 1;
     apply(values, input.begin(0, values, 0).marks);
     equal(values[0], 0);
-    apply(values, input.move(12, values, 6));
-    equal([values[0], values[6], values[12]], [initial === 1 ? 1 : 0, 0, 2]);
+    apply(values, input.move(18, values, 6));
+    equal(
+      [values[0], values[6], values[12], values[18]],
+      initial === 1 ? [1, 2, 2, 1] : [0, 0, 0, 1],
+    );
     equal(input.move(0, values, 6), []);
     input.end(0, 100);
     apply(values, input.begin(0, values, 150).marks);
     apply(values, input.move(12, values, 6));
-    equal([values[0], values[6], values[12]], [initial, 2, 0]);
+    equal([values[0], values[6], values[12]], [initial, 2, 2]);
   }
 });
 

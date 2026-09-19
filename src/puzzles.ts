@@ -2,6 +2,7 @@ import { findSets, generateSets } from "./sets.ts";
 import { generateAkari, validAkari } from "./akari.ts";
 import { isDifficulty, supportsDifficulty, type Difficulty } from "./difficulty.ts";
 import { generateRatedQueens, QUEENS_SIZES } from "./queens-difficulty.ts";
+import { generateRatedNumberPuzzle } from "./number-difficulty.ts";
 import {
   generateDosun,
   generateFiveCells,
@@ -135,7 +136,7 @@ export const META: Record<
       "Place exactly one queen in each row, column, and colored region.",
       "Queens cannot touch, including diagonally.",
       "Double-click or double-tap to place a queen. Tap a mark to clear it.",
-      "Single-click or tap to mark an X; drag to toggle each square between X and empty. Dragging preserves queens.",
+      "Single-click or tap to mark an X. Drag from an empty square to add Xs, or from an X to erase Xs. Dragging preserves queens.",
       "X marks are optional notes.",
       "Keyboard: arrows select; Space cycles empty → queen → X → empty.",
     ],
@@ -662,11 +663,47 @@ export function countShikaku(clues: number[], n: number, limit = 2): number {
   visit(options.map((_, i) => i));
   return count;
 }
-export function generateShikaku(p: Puzzle, rng: Random, allowTrivial = false) {
+export function generateShikaku(
+  p: Puzzle,
+  rng: Random,
+  allowTrivial = false,
+  preferBlocks = !allowTrivial,
+) {
   const n = p.size;
   for (let attempt = 0; attempt < 500; attempt++) {
     const rects: number[][] = [];
     const split = (x: number, y: number, w: number, h: number) => {
+      if (preferBlocks) {
+        const area = w * h, block = w > 1 && h > 1;
+        if (
+          (block && area <= 9 && (area <= 6 || rng.next() < 0.7)) ||
+          (!block && area <= 3)
+        ) {
+          rects.push(rectangle(y * n + x, (y + h - 1) * n + x + w - 1, n));
+          return;
+        }
+        // Prefer cuts that leave two substantial rectangles. Edge cuts remain
+        // possible, giving small strips a supporting role in the partition.
+        const cuts: { vertical: boolean; k: number; weight: number }[] = [];
+        for (const vertical of [true, false]) {
+          const length = vertical ? w : h, breadth = vertical ? h : w;
+          for (let k = 1; k < length; k++) {
+            if (k * breadth === 1 || (length - k) * breadth === 1) continue;
+            const thin = breadth === 1 || k === 1 || length - k === 1;
+            cuts.push({ vertical, k, weight: thin ? 0.1 : 1 });
+          }
+        }
+        let choice = rng.next() * cuts.reduce((sum, cut) => sum + cut.weight, 0);
+        const cut = cuts.find((cut) => (choice -= cut.weight) < 0) ?? cuts[cuts.length - 1];
+        if (cut.vertical) {
+          split(x, y, cut.k, h);
+          split(x + cut.k, y, w - cut.k, h);
+        } else {
+          split(x, y, w, cut.k);
+          split(x, y + cut.k, w, h - cut.k);
+        }
+        return;
+      }
       if (w * h <= 6 && (w * h <= 3 || rng.next() < 0.6)) {
         rects.push(rectangle(y * n + x, (y + h - 1) * n + x + w - 1, n));
         return;
@@ -682,6 +719,18 @@ export function generateShikaku(p: Puzzle, rng: Random, allowTrivial = false) {
       }
     };
     split(0, 0, n, n);
+    if (preferBlocks) {
+      const blocks = rects.filter((cells) => {
+        const first = cells[0], last = cells[cells.length - 1];
+        return first % n !== last % n && (first / n | 0) !== (last / n | 0);
+      });
+      // Substantial rectangles should carry the puzzle; strips only fill gaps.
+      if (
+        blocks.length < 3 || blocks.reduce((sum, cells) => sum + cells.length, 0) < n * n * 0.75
+      ) {
+        continue;
+      }
+    }
     const clues = Array(n * n).fill(0);
     rects.forEach((cells) => clues[rng.pick(cells)] = cells.length);
     if (
@@ -694,6 +743,27 @@ export function generateShikaku(p: Puzzle, rng: Random, allowTrivial = false) {
       rects.forEach((cells, i) => cells.forEach((c) => p.solution[c] = i + 1));
       return;
     }
+  }
+  if (preferBlocks) {
+    // Solver-verified fallback: four blocks and two small fillers, no singletons.
+    if (n !== 6) throw new Error("Shikaku fallback requires a 6 × 6 board");
+    p.clues = [
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 8, 0, 0, 0],
+      [0, 6, 0, 2, 2, 0],
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+      [9, 0, 0, 0, 9, 0],
+    ].flat();
+    p.solution = [
+      [1, 1, 2, 2, 2, 2],
+      [1, 1, 2, 2, 2, 2],
+      [1, 1, 3, 3, 4, 4],
+      [5, 5, 5, 6, 6, 6],
+      [5, 5, 5, 6, 6, 6],
+      [5, 5, 5, 6, 6, 6],
+    ].flat();
+    return;
   }
   if (!allowTrivial) {
     // Independently generated and solver-verified: neighboring rectangles constrain
@@ -1043,7 +1113,8 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   switch (kind) {
     case "sudoku":
     case "killer":
-      sudoku(p, rng);
+      if (difficulty) generateRatedNumberPuzzle(p, rng, difficulty);
+      else sudoku(p, rng);
       break;
     case "queens":
       if (difficulty) generateRatedQueens(p, rng, difficulty);
@@ -1056,13 +1127,20 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       atoms(p, rng);
       break;
     case "shikaku":
-      generateShikaku(p, rng, allowTrivial);
+      // Preserve completed and in-progress daily boards through September 19.
+      generateShikaku(
+        p,
+        rng,
+        allowTrivial,
+        !/^\d{4}-\d{2}-\d{2}$/.test(seed) || seed >= "2026-09-20",
+      );
       break;
     case "snap":
       snap(p, rng);
       break;
     case "mambo":
-      mambo(p, rng);
+      if (difficulty) generateRatedNumberPuzzle(p, rng, difficulty);
+      else mambo(p, rng);
       break;
     case "sets":
       generateSets(p, rng);

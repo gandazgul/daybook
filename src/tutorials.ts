@@ -307,7 +307,7 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
         ),
         step(
           "Optional X marks",
-          "Single-tap to mark an X. Drag to toggle each square once: empty becomes X, and X becomes empty. Dragging preserves queens. Xs are optional notes.",
+          "Single-tap to mark an X. Drag from an empty square to add Xs, or from an X to erase Xs. Dragging preserves queens. Xs are optional notes.",
           row(0),
         ),
       ];

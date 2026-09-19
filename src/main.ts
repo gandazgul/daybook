@@ -1,10 +1,9 @@
 import { ScrollMomentum } from "./scroll.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import {
-  dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, DIFFICULTY_START,
+  dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, difficultyDescription, difficultyStart,
   DifficultyChoices, type DifficultyChoice, isDifficulty, supportsDifficulty,
 } from "./difficulty.ts";
-import { QUEENS_SIZES } from "./queens-difficulty.ts";
 import { ACTION_ICONS, drawActionIcon } from "./icons.ts";
 import { cardAttributes, cardDescription, findSets, SET_ATTRIBUTES } from "./sets.ts";
 import Phaser from "phaser";
@@ -1295,10 +1294,8 @@ class Daybook extends Phaser.Scene {
     this.draw();
     this.announceTutorial();
   }
-  finishTutorial(completed = false) {
-    if (completed && this.tutorialPage === tutorialSteps(this.puzzle!).length - 1) {
-      tutorials.markSeen(this.puzzle!.kind);
-    }
+  finishTutorial(markSeen = false) {
+    if (markSeen) tutorials.markSeen(this.puzzle!.kind);
     this.modal = null;
     this.focused = -1;
     this.scrollY = 0;
@@ -1454,7 +1451,7 @@ class Daybook extends Phaser.Scene {
       12, c.accent).setLetterSpacing(1);
     if (stepLabel.width > textWidth - 84) stepLabel.setScale((textWidth - 84) / stepLabel.width);
     this.button(cardX + cardWidth - pad - 72, cardY + pad, 72, 40, inHint ? "Close" : "Skip",
-      () => inHint ? this.closeHint() : this.finishTutorial(), false, false, 0).setFontSize(16);
+      () => inHint ? this.closeHint() : this.finishTutorial(true), false, false, 0).setFontSize(16);
     title.setPosition(cardX + pad, cardY + pad + 52);
     body.setPosition(cardX + pad, cardY + pad + 52 + title.height + 12);
     this.children.bringToTop(title);
@@ -1591,7 +1588,8 @@ class Daybook extends Phaser.Scene {
       this.button(ux, controlsY + 82, uw, 40, "Tutorial", () => this.startTutorial(), false, false, 0);
     } else {
       if (notePuzzle) this.keypad(ux, controlsY, uw, 40);
-      const ty = controlsY + (notePuzzle ? 50 : 0), bw = (uw - 24) / 4;
+      const rowGap = landscape && this.H < 360 && notePuzzle ? 44 : 50;
+      const ty = controlsY + (notePuzzle ? rowGap : 0), bw = (uw - 24) / 4;
       this.iconButton(ux, ty, bw, 40, "Undo", () => this.undo(), false, !this.history.length);
       this.iconButton(ux + bw + 8, ty, bw, 40, notePuzzle ? this.notes ? "Notes on" : "Notes" : "Reset", () => {
         if (notePuzzle) this.toggleNotes();
@@ -1604,11 +1602,11 @@ class Daybook extends Phaser.Scene {
       this.iconButton(ux + (bw + 8) * 3, ty, bw, 40, "Pause", () => {
         this.modal = "pause"; this.draw();
       });
-      this.button(ux, ty + 50, (uw - 10) / 2, 40, "Tutorial", () => this.startTutorial(), false, false, 0);
-      this.iconButton(ux + (uw + 10) / 2, ty + 50, (uw - 10) / 2, 40, "Hint", () => this.openHint(), false, false, 0);
+      this.button(ux, ty + rowGap, (uw - 10) / 2, 40, "Tutorial", () => this.startTutorial(), false, false, 0);
+      this.iconButton(ux + (uw + 10) / 2, ty + rowGap, (uw - 10) / 2, 40, "Hint", () => this.openHint(), false, false, 0);
       if (this.notice) {
         // Feedback stays visible without pushing controls below the viewport.
-        const message = this.text(ux, ty + 95, this.notice, 11, c.error, undefined, uw);
+        const message = this.text(ux, ty + rowGap + 45, this.notice, 11, c.error, undefined, uw);
         if (message.height > this.H - message.y - 4) {
           message.setScale(Math.min(1, (this.H - message.y - 4) / message.height));
         }
@@ -2805,7 +2803,7 @@ class Daybook extends Phaser.Scene {
   drawDifficulty() {
     const target = this.difficultyTarget!;
     const practice = target.seed.startsWith("practice:"), short = this.H < 480;
-    const original = !practice && (target.seed < DIFFICULTY_START || !!store.get(target.seed, target.kind));
+    const original = !practice && (target.seed < difficultyStart(target.kind) || !!store.get(target.seed, target.kind));
     const c = this.C, w = Math.min(this.W - 24, 460), pad = short ? 16 : 24;
     const h = short ? original ? 296 : 252 : original ? 410 : 354;
     const x = (this.W - w) / 2, y = (this.H - h) / 2, inner = w - pad * 2;
@@ -2817,8 +2815,8 @@ class Daybook extends Phaser.Scene {
     this.add.rectangle(0, 0, this.W, this.H, c.bg, .96).setOrigin(0).setInteractive();
     this.box(x, y, w, h, c.panel, c.line, 0);
     this.text(x + pad, y + (short ? 14 : 24), "Choose difficulty", short ? 23 : 27, c.ink, "Georgia", inner);
-    this.text(x + pad, y + (short ? 50 : 70), practice ? "Regional Queens · practice" :
-      `Daily pick: ${DIFFICULTY_LABELS[pick]} · ${target.seed}`, short ? 13 : 14, c.muted, undefined, inner);
+    this.text(x + pad, y + (short ? 50 : 70), practice ? `${META[target.kind].name} · practice` :
+      `Daily: ${DIFFICULTY_LABELS[pick]} · ${target.seed}`, short ? 13 : 14, c.muted, undefined, inner);
     const optionsY = y + (short ? 82 : 112), bw = (inner - 12) / 3;
     DIFFICULTIES.forEach((choice, i) => {
       this.button(x + pad + i * (bw + 6), optionsY, bw, 44, DIFFICULTY_LABELS[choice], () => {
@@ -2826,17 +2824,14 @@ class Daybook extends Phaser.Scene {
       }, level === choice, false, 0).setFontSize(16);
     });
     if (!short) {
-      const description = level === "classic" ? "The original daily board, with your existing progress." :
-        `${QUEENS_SIZES[level]} × ${QUEENS_SIZES[level]} · ` + {
-          easy: "Find the only available square.",
-          medium: "Combine row, column, and region exclusions.",
-          hard: "Test candidates and follow their consequences.",
-        }[level];
+      const description = difficultyDescription(target.kind, level);
       this.text(x + pad, optionsY + 58, description, 14, c.muted, undefined, inner);
     }
     const status = saved?.completed ? "Completed at this level." : saved && saved.elapsed > 0 ?
-      `In progress · ${formatTime(saved.elapsed)}` : practice ? "A fresh puzzle at your chosen level." : "Any level completes Queens for this day.";
+      `In progress · ${formatTime(saved.elapsed)}` : practice ? "A fresh puzzle at your chosen level." : "Not started at this level.";
     this.text(x + pad, y + (short ? 140 : 226), status, 14, c.accent, undefined, inner);
+    if (!practice) this.text(x + pad, y + (short ? 161 : 251),
+      "Any level counts toward today's achievement.", 12, c.muted, undefined, inner);
     if (original) {
       this.button(x + pad, y + (short ? 184 : 266), inner, 40, "Original daily board", () => {
         target.choice = "classic"; this.draw();

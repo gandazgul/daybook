@@ -1,4 +1,4 @@
-import { dailyDifficulty, DIFFICULTIES, DifficultyChoices } from "../src/difficulty.ts";
+import { dailyDifficulty, DIFFICULTIES, DifficultyChoices, supportsDifficulty } from "../src/difficulty.ts";
 import { countQueens, generate, isSolved, KINDS, Random } from "../src/puzzles.ts";
 import { generateRatedQueens, QUEENS_SIZES, rateQueens } from "../src/queens-difficulty.ts";
 import { ProgressStore, STORAGE_KEY } from "../src/storage.ts";
@@ -100,23 +100,27 @@ Deno.test("difficulty identities survive eviction and do not affect original boa
   );
   let rejected = false;
   try {
-    generate("sudoku", "practice:unsupported", "hard");
+    generate("pipes", "practice:unsupported", "hard");
   } catch {
     rejected = true;
   }
   assert(rejected, "unsupported games must not silently claim a rating");
 });
-Deno.test("daily difficulty is shared and repeatable while legacy defaults stay original", () => {
+Deno.test("daily difficulty uses per-game defaults while archived picks stay original", () => {
   assert(dailyDifficulty("queens", "2026-09-14") === undefined);
-  const found = new Set();
-  for (let i = 0; i < 90; i++) {
-    const date = new Date(Date.UTC(2026, 8, 15 + i)).toISOString().slice(0, 10);
-    found.add(dailyDifficulty("queens", date));
-    const a = new DifficultyChoices(disk()), b = new DifficultyChoices(disk());
-    assert(a.get("queens", date) === b.get("queens", date));
+  for (const kind of ["mambo", "sudoku", "killer"] as const) {
+    assert(dailyDifficulty(kind, "2026-09-18") === undefined);
   }
-  assert(found.size === 3);
-  for (const kind of KINDS.filter((k) => k !== "queens")) {
+  for (let i = 0; i < 90; i++) {
+    const date = new Date(Date.UTC(2026, 8, 19 + i)).toISOString().slice(0, 10);
+    const a = new DifficultyChoices(disk()), b = new DifficultyChoices(disk());
+    for (const kind of ["queens", "mambo", "sudoku", "killer"] as const) {
+      const expected = kind === "queens" || kind === "mambo" ? "hard" : "easy";
+      assert(dailyDifficulty(kind, date) === expected);
+      assert(a.get(kind, date) === expected && b.get(kind, date) === expected);
+    }
+  }
+  for (const kind of KINDS.filter((k) => !supportsDifficulty(k))) {
     assert(dailyDifficulty(kind, "2026-10-01") === undefined);
   }
 });

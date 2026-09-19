@@ -63,17 +63,22 @@ Deno.test("Tutorial first-run flags are independent per game and persist across 
       data.set(key, value);
     },
   };
-  const first = new TutorialStore(storage);
-  assert(!first.hasSeen("sudoku"), "New device should see the tutorial");
-  first.markSeen("sudoku");
-  assert(first.hasSeen("sudoku"), "Completing the tutorial should mark the game seen");
-  const next = new TutorialStore(storage);
-  assert(next.hasSeen("sudoku"), "Daily and practice share a game flag across sessions");
-  assert(!next.hasSeen("killer"), "Killer has its own tutorial");
-  assert(
-    data.size === 1 && data.get(TUTORIAL_KEY + "sudoku") === "seen",
-    "Only the tutorial flag should be written",
-  );
+  for (const kind of KINDS) {
+    data.clear();
+    const first = new TutorialStore(storage);
+    assert(!first.hasSeen(kind), `${kind}: new device should see the tutorial`);
+    first.markSeen(kind);
+    assert(first.hasSeen(kind), `${kind}: finishing or skipping should mark the game seen`);
+    const next = new TutorialStore(storage);
+    assert(next.hasSeen(kind), `${kind}: daily and practice share a flag across sessions`);
+    for (const other of KINDS.filter((other) => other !== kind)) {
+      assert(!next.hasSeen(other), `${other}: has its own tutorial`);
+    }
+    assert(
+      data.size === 1 && data.get(TUTORIAL_KEY + kind) === "seen",
+      "Only the tutorial flag should be written",
+    );
+  }
 });
 
 Deno.test("Tutorial flags tolerate damaged or unavailable local storage", () => {

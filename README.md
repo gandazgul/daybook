@@ -73,6 +73,11 @@ shaded cells left to find. Bounded fallbacks satisfy the same checks and have un
 These guards apply to practice and daily boards from September 12, 2026; earlier daily layouts and
 saved progress stay unchanged. Mosaic is available in practice and does not count toward daily completion.
 
+Shikaku practice boards and daily boards from September 20, 2026 favor blocks at least two cells
+wide and tall, covering at least 75% of the grid. Rectangles have 2–9 cells; thin strips are limited
+to two or three cells as fillers, and single-cell regions are excluded. Uniqueness and interacting
+clue checks still apply, including to the bounded fallback. Earlier daily boards stay unchanged.
+
 Akari generates 6 × 6 boards with connected lines of light blocked by black squares. Every board has
 one solution and at least four bulbs to find. Generation and clue removal both verify uniqueness;
 a bounded, verified fallback keeps generation available offline. Numbered black squares constrain
@@ -199,36 +204,47 @@ on desktop or below it on smaller screens.
 
 ## Difficulty
 
-Regional Queens is the first game with selectable difficulty. The other games keep their existing
-generators and do not display unverified ratings.
+Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
+and practice. From **September 19, 2026**, the daily defaults are:
 
-- **Easy, 6 × 6:** solvable by repeatedly finding the only available square in a row, column, or region.
-- **Medium, 7 × 7:** requires combining exclusions across units, including squares ruled out by every
-  possible queen position in another unit.
-- **Hard, 8 × 8:** also requires testing candidate placements and following their consequences to a
-  contradiction. The rating solver uses bounded candidate trials rather than recursive guessing.
+| Game | Daily default | Easy | Medium | Hard |
+| --- | --- | --- | --- | --- |
+| Regional Queens | Hard | 6 × 6, single available squares | 7 × 7, combined unit exclusions | 8 × 8, candidate contradiction trials |
+| Balance | Hard | Direct shape counts, triples, and = / × clues | Compatible row and column patterns | Candidate contradiction trials |
+| Sudoku | Easy | Naked and hidden singles | Naked pairs and locked candidates | Candidate contradiction trials |
+| Killer Sudoku | Easy | Singles and last-cell cage sums | Cage combinations, pairs, and locked candidates | Candidate contradiction trials |
 
-Ratings describe the logical techniques required, not measured human solving times. Every generated
-board has one solution, connected regions, and the requested rating. Generation starts from one of
-16 verified boards per level, changes region boundaries while rechecking these properties, then
-rotates, reflects, and relabels the regions. This keeps generation bounded and offline, with a valid
-board even when no proposed boundary changes pass. The bank and generation algorithm belong to
-`difficulty-v1`; changing them after release requires retaining the old version for saved boards.
+Balance stays 6 × 6; both Sudokus stay 9 × 9. Ratings describe the logical techniques required,
+not measured human solving times. Rating solvers use visible constraints only, never the stored
+answer. Every rated board has a unique solution; Hard needs at least one candidate trial beyond
+Medium deductions, using contradiction proofs without recursive guessing.
 
-Daily Queens uses a shared, date-seeded difficulty pick from **September 15, 2026**. The collection
-shows that level; open the puzzle and use **Easy / Medium / Hard · Change** to choose another. Each
-date and level has its own board, entries, notes, time, and completion. Changing a level preserves
-the previous board, and the last chosen level resumes for that date. Finishing **any** level completes
-Queens for the daily collection; finishing more levels still counts once. Tomorrow starts with its
-shared pick. Earlier dates retain their **Original** board and saves, with the new levels available
-as alternatives. Original boards are not retroactively labeled as a rated tier.
-An existing Original save also stays the default when a device installs this update after that date.
+Queens starts from 16 verified boards per level, changes connected region boundaries while checking
+uniqueness and rating, then rotates, reflects, and relabels regions. The three number/shape games
+start from 24 verified boards per game and level, apply rule-preserving symmetries, and make bounded
+clue edits that retain the exact rating. Sudoku also permutes digits, bands, stacks, and rows/columns
+within them. Killer only uses grid symmetries and digit complementing, preserving connected cages
+and their sums. The offline authoring tool is `scripts/build-difficulty-bank.ts`; it writes to a
+separate output file. Published banks and algorithms belong to `difficulty-v1` and must not be
+regenerated or changed in place after release without preserving saved-board identities.
 
-Practice asks for a level before opening Queens, remembers that choice for later practice, and keeps
-it for **Another of these**. Practice progress remains session-only and separate from the daily
-calendar. The difficulty chooser pauses the timer; auto-update snapshots include the current level.
-Smart hints still explain their supported deductions and can report that no deduction was found on
-harder boards; Reveal move remains available at every level.
+Open a daily puzzle and use **Easy / Medium / Hard · Change** to choose another level. Each date and
+level keeps its own board, entries, notes, time, and completion. Finishing **any** level earns that
+game's daily credit and counts toward the day's achievement; finishing more levels still counts
+once. Resetting an unfinished or completed level does not erase credit earned at another level.
+The last chosen level resumes for that date. Tomorrow starts with that game's default, independently
+of the chosen level today or in practice.
+
+Published Queens picks from September 15–18 retain their original date-seeded levels. Earlier Queens
+dates and pre-September-19 dates for the other three games retain their **Original** boards, with
+rated levels available as alternatives. Existing Original saves also resume after an update, even
+on a newer date. Original boards are not retroactively labeled as a rated tier.
+
+Practice asks for a level before opening these four games, remembers it separately for each game,
+and keeps it for **Another of these**. Practice progress remains session-only and separate from the
+daily calendar. The difficulty chooser pauses the timer; auto-update snapshots include the current
+level. Smart hints explain their supported deductions and can report that no deduction was found
+on harder boards; Reveal move remains available at every level.
 
 ## Night play and controls
 
@@ -254,8 +270,8 @@ reduced-motion setting, this becomes a stationary highlight.
 - **Pipes:** tap to rotate clockwise.
 - **Atoms:** tap midway between two atoms to cycle no bond → one line → two lines. With a keyboard,
   select an atom with arrows, then Shift + an arrow cycles its bond.
-- **Regional Queens:** click or tap to mark a large X. Drag to toggle each cell once per stroke:
-  empty cells become Xs, and Xs clear. Crossing a cell again in the same stroke leaves it unchanged.
+- **Regional Queens:** click or tap to mark a large X. Drag from an empty cell to add Xs, or from
+  an X to erase Xs. The starting cell sets the mode for the entire stroke.
   Double-click or double-tap to place a queen. Tap a mark to clear it. Dragging preserves queens and
   is undone as one action. With a keyboard, arrows select and Space cycles the marks.
 - **Sets:** tap three cards to check them, tap again to deselect. Find three distinct trios; cards
@@ -360,7 +376,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **73 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **80 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
