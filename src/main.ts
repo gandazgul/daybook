@@ -1,7 +1,8 @@
+import { ARCHIVE_START } from "./puzzle-archive.ts";
 import { ScrollMomentum } from "./scroll.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import {
-  dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, difficultyDescription, difficultyStart,
+  dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, difficultyDescription,
   DifficultyChoices, type DifficultyChoice, isDifficulty, supportsDifficulty,
 } from "./difficulty.ts";
 import { ACTION_ICONS, drawActionIcon } from "./icons.ts";
@@ -1126,7 +1127,7 @@ class Daybook extends Phaser.Scene {
         dy = y + 22 + Math.floor(slot / 7) * rowH + (small ? 0 : rowH / 2 - 8),
         key = dateKey(new Date(year, month, day, 12)),
         done = store.count(key),
-        future = key > this.today,
+        future = key > this.today || key < ARCHIVE_START,
         selected = key === this.selectedDate;
       if (selected) this.circle(dx, dy + 8, small ? 11 : Math.min(22, rowH * .48, cw * .45), c.accent);
       else if (done === kindsForDate(key).length) this.circle(dx, dy + 8, small ? 11 : Math.min(22, rowH * .48, cw * .45), c.soft);
@@ -1190,7 +1191,7 @@ class Daybook extends Phaser.Scene {
     this.iconButton(prevX, buttonY, arrowWidth, buttonHeight, "Previous month", () => {
       this.month.setMonth(this.month.getMonth() - 1);
       this.draw();
-    }, false, false, 0);
+    }, false, dateKey(this.month) <= ARCHIVE_START, 0);
     const today = parseDate(this.today);
     const canNext = this.month.getFullYear() < today.getFullYear() ||
       (this.month.getFullYear() === today.getFullYear() && this.month.getMonth() < today.getMonth());
@@ -2806,7 +2807,7 @@ class Daybook extends Phaser.Scene {
   drawDifficulty() {
     const target = this.difficultyTarget!;
     const practice = target.seed.startsWith("practice:"), short = this.H < 480;
-    const original = !practice && (target.seed < difficultyStart(target.kind) || !!store.get(target.seed, target.kind));
+    const original = !practice && (!dailyDifficulty(target.kind, target.seed) || !!store.get(target.seed, target.kind));
     const c = this.C, w = Math.min(this.W - 24, 460), pad = short ? 16 : 24;
     const h = short ? original ? 296 : 252 : original ? 410 : 354;
     const x = (this.W - w) / 2, y = (this.H - h) / 2, inner = w - pad * 2;

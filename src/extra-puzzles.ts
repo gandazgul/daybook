@@ -141,7 +141,7 @@ export function solveDosun(regions: number[], n: number, limit = 2) {
   return { count, solution };
 }
 
-export function generateDosun(p: Puzzle, rng: Random, allowTrivial = false) {
+export function generateDosun(p: Puzzle, rng: Random) {
   const n = p.size;
   // Start from supported chambers, then reshape connected regions while retaining
   // a single solution. Moving any boundary cell can introduce supported stacks.
@@ -185,7 +185,7 @@ export function generateDosun(p: Puzzle, rng: Random, allowTrivial = false) {
       ? 2
       : 0
   );
-  if (!allowTrivial && validDosun(p.regions, ceilingAndFloor, n)) {
+  if (validDosun(p.regions, ceilingAndFloor, n)) {
     // Reshaping can exhaust its budget without making the chambers interesting.
     // This independently generated, unique board requires pieces supported by other pieces.
     if (n !== 6) throw new Error("Dosun-Fuwari fallback requires a 6 × 6 board");
@@ -315,7 +315,7 @@ export function solveNurikabe(clues: number[], n: number, limit = 2) {
   visit(numbered.map((_, i) => i), 0n, 0n);
   return { count, solution };
 }
-export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false, capSingletons = true) {
+export function generateNurikabe(p: Puzzle, rng: Random) {
   const n = p.size;
   for (let attempt = 0; attempt < 160; attempt++) {
     const values = Array(n * n).fill(2);
@@ -336,8 +336,7 @@ export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false, c
       values[cell] = 1;
       const islands = groups(values, n, (i) => values[i] === 2);
       if (islands.length < 4 || islands.length > 8 || islands.some((s) => s.length > 4)) continue;
-      if (capSingletons && islands.filter((island) => island.length === 1).length > 2) continue;
-      if (!allowAllOnes && islands.every((island) => island.length === 1)) continue;
+      if (islands.filter((island) => island.length === 1).length > 2) continue;
       const clues = Array(n * n).fill(0);
       islands.forEach((cells) => clues[rng.pick(cells)] = cells.length);
       if (solveNurikabe(clues, n).count !== 1) continue;
@@ -347,35 +346,20 @@ export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false, c
       return;
     }
   }
-  if (!allowAllOnes || capSingletons) {
-    // A solver-verified board from our own generator; symmetry preserves its unique solution.
-    // The 2- and 3-cell islands guarantee the fallback also satisfies the variety requirement.
-    if (n !== 5) throw new Error("Nurikabe fallback requires a 5 × 5 board");
-    const clues = capSingletons
-      ? [0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2]
-      : [2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1];
-    const solution = capSingletons
-      ? [1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2]
-      : [2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 2, 1, 2, 1, 2];
-    const turns = rng.int(4), mirror = rng.int(2);
-    p.clues = Array(n * n).fill(0);
-    p.solution = Array(n * n).fill(0);
-    clues.forEach((clue, i) => {
-      let row = Math.floor(i / n), col = mirror ? n - 1 - i % n : i % n;
-      for (let turn = 0; turn < turns; turn++) [row, col] = [col, n - 1 - row];
-      p.clues[row * n + col] = clue;
-      p.solution[row * n + col] = solution[i];
-    });
-    p.initial = p.clues.map((v) => v ? 2 : 0);
-    return;
-  }
-  // Preserve the original algorithm for already published daily seeds.
-  const row = rng.int(2), col = rng.int(2);
-  p.clues = Array.from(
-    { length: n * n },
-    (_, i) => (Math.floor(i / n) % 2 === row && i % n % 2 === col) ? 1 : 0,
-  );
-  p.solution = p.clues.map((v) => v ? 2 : 1);
+  // A solver-verified board from our own generator; symmetry preserves its unique solution.
+  // The 2- and 3-cell islands guarantee the fallback also satisfies the variety requirement.
+  if (n !== 5) throw new Error("Nurikabe fallback requires a 5 × 5 board");
+  const clues = [0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2];
+  const solution = [1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2];
+  const turns = rng.int(4), mirror = rng.int(2);
+  p.clues = Array(n * n).fill(0);
+  p.solution = Array(n * n).fill(0);
+  clues.forEach((clue, i) => {
+    let row = Math.floor(i / n), col = mirror ? n - 1 - i % n : i % n;
+    for (let turn = 0; turn < turns; turn++) [row, col] = [col, n - 1 - row];
+    p.clues[row * n + col] = clue;
+    p.solution[row * n + col] = solution[i];
+  });
   p.initial = p.clues.map((v) => v ? 2 : 0);
 }
 

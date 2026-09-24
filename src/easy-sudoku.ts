@@ -1,6 +1,5 @@
 import type { Cage, Puzzle, Random } from "./puzzles.ts";
 
-export const RELAXED_SUDOKU_START = "2026-09-25";
 const cells = Array.from({ length: 81 }, (_, i) => i);
 const units = [
   ...Array.from({ length: 9 }, (_, r) => cells.filter((i) => Math.floor(i / 9) === r)),

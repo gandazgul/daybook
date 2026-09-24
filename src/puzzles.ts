@@ -1,6 +1,7 @@
+import { archivedPuzzle } from "./puzzle-archive.ts";
 import { findSets, generateSets } from "./sets.ts";
 import { generateAkari, validAkari } from "./akari.ts";
-import { isDifficulty, supportsDifficulty, type Difficulty } from "./difficulty.ts";
+import { DAILY_DIFFICULTIES, isDifficulty, supportsDifficulty, type Difficulty } from "./difficulty.ts";
 import { generateRatedQueens, QUEENS_SIZES } from "./queens-difficulty.ts";
 import { generateRatedNumberPuzzle } from "./number-difficulty.ts";
 import {
@@ -11,7 +12,7 @@ import {
   validFiveCells,
   validNurikabe,
 } from "./extra-puzzles.ts";
-/** All generation is deterministic. Bump this version if generation changes after release. */
+/** Stable seed/storage namespace. Archive published boards before changing generators. */
 export const GENERATOR_VERSION = 1;
 // These persisted identifiers also seed generation; keep them stable when display names change.
 export type Kind =
@@ -429,44 +430,6 @@ export function countSudoku(grid: number[], cages: Cage[] = [], limit = 2): numb
   visit();
   return count;
 }
-function sudoku(p: Puzzle, rng: Random) {
-  const order = () =>
-    rng.shuffle([0, 1, 2]).flatMap((b) => rng.shuffle([0, 1, 2]).map((i) => b * 3 + i));
-  const rows = order(), cols = order(), digits = rng.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  p.solution = rows.flatMap((r) => cols.map((c) => digits[(r * 3 + Math.floor(r / 3) + c) % 9]));
-  if (p.kind === "killer") {
-    const unseen = new Set(rng.shuffle(Array.from({ length: 81 }, (_, i) => i)));
-    while (unseen.size) {
-      const start = unseen.values().next().value!;
-      const cells = [start];
-      unseen.delete(start);
-      const length = 2 + rng.int(3);
-      while (cells.length < length) {
-        const choices = [...new Set(cells.flatMap((i) => adjacent(i, 9)))].filter((i) =>
-          unseen.has(i) && !cells.some((c) => p.solution[c] === p.solution[i])
-        );
-        if (!choices.length) break;
-        const next = rng.pick(choices);
-        unseen.delete(next);
-        cells.push(next);
-      }
-      p.cages.push({
-        cells: cells.sort((a, b) => a - b),
-        sum: cells.reduce((s, i) => s + p.solution[i], 0),
-      });
-    }
-  }
-  p.initial = [...p.solution];
-  const target = p.kind === "killer" ? 9 : 36;
-  let remaining = 81;
-  for (const i of rng.shuffle(Array.from({ length: 81 }, (_, i) => i))) {
-    const value = p.initial[i];
-    p.initial[i] = 0;
-    if (countSudoku(p.initial, p.cages) !== 1) p.initial[i] = value;
-    else remaining--;
-    if (remaining <= target) break;
-  }
-}
 export function countQueens(regions: number[], n: number, limit = 2) {
   let count = 0;
   const usedCols = new Set<number>(), usedRegions = new Set<number>();
@@ -490,74 +453,6 @@ export function countQueens(regions: number[], n: number, limit = 2) {
   };
   visit(0, -10);
   return count;
-}
-function queens(p: Puzzle, rng: Random) {
-  const n = p.size;
-  for (let attempt = 0; attempt < 1000; attempt++) {
-    let perm: number[];
-    do {
-      perm = rng.shuffle(Array.from({ length: n }, (_, i) => i));
-    } while (perm.some((c, r) => r > 0 && Math.abs(c - perm[r - 1]) <= 1));
-    const regions = Array(n * n).fill(-1);
-    perm.forEach((c, r) => regions[r * n + c] = r);
-    while (regions.includes(-1)) {
-      const options: [number, number][] = [];
-      for (let i = 0; i < n * n; i++) {
-        if (regions[i] >= 0) {
-          for (const j of adjacent(i, n)) if (regions[j] < 0) options.push([j, regions[i]]);
-        }
-      }
-      const [cell, region] = rng.pick(options);
-      regions[cell] = region;
-    }
-    if (countQueens(regions, n) === 1) {
-      p.regions = regions;
-      p.solution = Array(n * n).fill(0);
-      perm.forEach((c, r) => p.solution[r * n + c] = 1);
-      return;
-    }
-  }
-  // Guaranteed unique fallback, only used if the randomized search exhausts its budget.
-  p.regions = [
-    1,
-    2,
-    2,
-    0,
-    2,
-    2,
-    1,
-    2,
-    2,
-    2,
-    2,
-    2,
-    1,
-    2,
-    2,
-    2,
-    2,
-    2,
-    4,
-    4,
-    2,
-    2,
-    2,
-    3,
-    4,
-    4,
-    5,
-    5,
-    5,
-    5,
-    4,
-    4,
-    5,
-    5,
-    5,
-    5,
-  ];
-  p.solution = Array(n * n).fill(0);
-  [3, 6, 14, 23, 25, 34].forEach((i) => p.solution[i] = 1);
 }
 function pipes(p: Puzzle, rng: Random) {
   const n = p.size;
@@ -726,7 +621,7 @@ function staggeredShikakuPartition(n: number, rng: Random): number[][] | null {
   };
   return visit(0, false) ? rects : null;
 }
-function generateStaggeredShikaku(p: Puzzle, rng: Random) {
+export function generateShikaku(p: Puzzle, rng: Random) {
   const n = p.size;
   for (let attempt = 0; attempt < 100; attempt++) {
     const rects = staggeredShikakuPartition(n, rng);
@@ -763,135 +658,7 @@ function generateStaggeredShikaku(p: Puzzle, rng: Random) {
     [7, 7, 5, 5, 5, 6],
   ].flat();
 }
-export function generateShikaku(
-  p: Puzzle,
-  rng: Random,
-  allowTrivial = false,
-  preferBlocks = !allowTrivial,
-) {
-  if (preferBlocks) {
-    generateStaggeredShikaku(p, rng);
-    return;
-  }
-  const n = p.size;
-  for (let attempt = 0; attempt < 500; attempt++) {
-    const rects: number[][] = [];
-    const split = (x: number, y: number, w: number, h: number) => {
-      if (w * h <= 6 && (w * h <= 3 || rng.next() < 0.6)) {
-        rects.push(rectangle(y * n + x, (y + h - 1) * n + x + w - 1, n));
-        return;
-      }
-      if (w > 1 && (h === 1 || rng.next() < 0.5)) {
-        const k = 1 + rng.int(w - 1);
-        split(x, y, k, h);
-        split(x + k, y, w - k, h);
-      } else {
-        const k = 1 + rng.int(h - 1);
-        split(x, y, w, k);
-        split(x, y + k, w, h - k);
-      }
-    };
-    split(0, 0, n, n);
-    const clues = Array(n * n).fill(0);
-    rects.forEach((cells) => clues[rng.pick(cells)] = cells.length);
-    if (
-      (allowTrivial ||
-        shikakuOptions(clues, n).filter((options) => options.length > 1).length >= 2) &&
-      countShikaku(clues, n) === 1
-    ) {
-      p.clues = clues;
-      p.solution = Array(n * n).fill(0);
-      rects.forEach((cells, i) => cells.forEach((c) => p.solution[c] = i + 1));
-      return;
-    }
-  }
-  if (!allowTrivial) {
-    // Independently generated and solver-verified: neighboring rectangles constrain
-    // each other, unlike the old fallback of six immediately forced strips.
-    if (n !== 6) throw new Error("Shikaku fallback requires a 6 × 6 board");
-    p.clues = [
-      0,
-      0,
-      0,
-      0,
-      0,
-      6,
-      2,
-      6,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      4,
-      0,
-      0,
-      3,
-      0,
-      0,
-      3,
-      3,
-      0,
-      0,
-      6,
-      3,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-    ];
-    p.solution = [
-      1,
-      1,
-      1,
-      1,
-      1,
-      1,
-      2,
-      4,
-      4,
-      4,
-      7,
-      7,
-      2,
-      4,
-      4,
-      4,
-      7,
-      7,
-      3,
-      5,
-      5,
-      5,
-      8,
-      9,
-      3,
-      6,
-      6,
-      6,
-      8,
-      9,
-      3,
-      6,
-      6,
-      6,
-      8,
-      9,
-    ];
-    return;
-  }
-  // Preserve the original fallback for already-published daily boards.
-  p.clues = Array.from({ length: n * n }, (_, i) => i % n === 0 ? n : 0);
-  p.solution = Array.from({ length: n * n }, (_, i) => (i / n | 0) + 1);
-}
-function snap(p: Puzzle, rng: Random) {
+function snap(p: Puzzle, rng: Random, difficulty: Difficulty) {
   const n = p.size;
   let path = Array.from(
     { length: n },
@@ -910,7 +677,7 @@ function snap(p: Puzzle, rng: Random) {
     : Array.from({ length: 12 }, (_, i) => Math.round(i * (n * n - 1) / 11));
   checkpoints.forEach((i, k) => p.clues[path[i]] = k + 1);
   p.initial = [path[0]];
-  if (p.difficulty === "hard") {
+  if (difficulty === "hard") {
     // Walls only block unused edges, so the complete route always remains playable.
     const position = new Map(path.map((cell, i) => [cell, i]));
     const candidates = path.flatMap((a) => adjacent(a, n).flatMap((b) =>
@@ -956,29 +723,6 @@ export function countBalance(initial: number[], n: number, links: Link[], limit 
   };
   visit();
   return count;
-}
-function mambo(p: Puzzle, rng: Random) {
-  const n = p.size, a = Array(n * n).fill(0);
-  const fill = (i: number): boolean => {
-    if (i === n * n) return true;
-    for (const v of rng.shuffle([1, 2])) {
-      a[i] = v;
-      if (validBalance(a, n, []) && fill(i + 1)) return true;
-    }
-    a[i] = 0;
-    return false;
-  };
-  fill(0);
-  p.solution = [...a];
-  const pairs: [number, number][] = [];
-  for (let i = 0; i < n * n; i++) for (const j of adjacent(i, n)) if (j > i) pairs.push([i, j]);
-  p.links = rng.shuffle(pairs).slice(0, 9).map(([i, j]) => ({ a: i, b: j, same: a[i] === a[j] }));
-  p.initial = [...a];
-  for (const i of rng.shuffle(Array.from({ length: n * n }, (_, i) => i))) {
-    const v = p.initial[i];
-    p.initial[i] = 0;
-    if (countBalance(p.initial, n, p.links) !== 1) p.initial[i] = v;
-  }
 }
 export function neighborhood(i: number, n: number) {
   const cells: number[] = [];
@@ -1057,12 +801,12 @@ function mosaicCandidate(p: Puzzle, rng: Random) {
   }
   p.initial = p.clues.map((clue, i) => clue >= 0 ? p.solution[i] : 0);
 }
-export function generateMosaic(p: Puzzle, rng: Random, allowTrivial = false) {
+export function generateMosaic(p: Puzzle, rng: Random) {
   for (let attempt = 0; attempt < 32; attempt++) {
     mosaicCandidate(p, rng);
     // Clue cells are given and empty marks are optional. Count only shading
     // the player still has to do, not the number of undecided cells.
-    if (allowTrivial || p.solution.filter((v, i) => v === 1 && !p.initial[i]).length >= 4) return;
+    if (p.solution.filter((v, i) => v === 1 && !p.initial[i]).length >= 4) return;
   }
   // A bounded, independently generated fallback with six shaded cells left to find.
   if (p.size !== 6) throw new Error("Mosaic fallback requires a 6 × 6 board");
@@ -1153,9 +897,16 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   const key = `v${GENERATOR_VERSION}:${kind}:${seed}` + (difficulty ? `:difficulty-v1:${difficulty}` : "");
   const existing = cache.get(key);
   if (existing) return existing;
+  const archived = archivedPuzzle(kind, seed, difficulty);
+  if (archived) {
+    if (cache.size > 100) cache.delete(cache.keys().next().value!);
+    cache.set(key, archived);
+    return archived;
+  }
+  const level = difficulty ?? DAILY_DIFFICULTIES[kind];
   const rng = new Random(key),
-    size = kind === "snap" && difficulty && difficulty !== "easy" ? 7
-      : kind === "queens" && difficulty ? QUEENS_SIZES[difficulty] : kind === "sudoku" || kind === "killer"
+    size = kind === "snap" && level !== "easy" ? 7
+      : kind === "queens" ? QUEENS_SIZES[level!] : kind === "sudoku" || kind === "killer"
       ? 9
       : kind === "atoms" || kind === "sets"
       ? 4
@@ -1164,17 +915,13 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       : 6;
   const p = blank(kind, seed, size);
   if (difficulty) p.difficulty = difficulty;
-  // Keep today and archived daily layouts stable; practice and future days get quality guards.
-  const allowTrivial = /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-12";
   switch (kind) {
     case "sudoku":
     case "killer":
-      if (difficulty) generateRatedNumberPuzzle(p, rng, difficulty);
-      else sudoku(p, rng);
+      generateRatedNumberPuzzle(p, rng, level!);
       break;
     case "queens":
-      if (difficulty) generateRatedQueens(p, rng, difficulty);
-      else queens(p, rng);
+      generateRatedQueens(p, rng, level!);
       break;
     case "pipes":
       pipes(p, rng);
@@ -1183,37 +930,25 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       atoms(p, rng);
       break;
     case "shikaku":
-      // Preserve completed and in-progress daily boards through September 19.
-      generateShikaku(
-        p,
-        rng,
-        allowTrivial,
-        !/^\d{4}-\d{2}-\d{2}$/.test(seed) || seed >= "2026-09-20",
-      );
+      generateShikaku(p, rng);
       break;
     case "snap":
-      snap(p, rng);
+      snap(p, rng, level!);
       break;
     case "mambo":
-      if (difficulty) generateRatedNumberPuzzle(p, rng, difficulty);
-      else mambo(p, rng);
+      generateRatedNumberPuzzle(p, rng, level!);
       break;
     case "sets":
       generateSets(p, rng);
       break;
     case "mosaic":
-      generateMosaic(p, rng, allowTrivial);
+      generateMosaic(p, rng);
       break;
     case "dosun":
-      generateDosun(p, rng, allowTrivial);
+      generateDosun(p, rng);
       break;
     case "nurikabe":
-      // Date-version this change so older daily boards and their saved entries stay intact.
-      generateNurikabe(
-        p, rng,
-        /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-11",
-        !/^\d{4}-\d{2}-\d{2}$/.test(seed) || seed >= "2026-09-25",
-      );
+      generateNurikabe(p, rng);
       break;
     case "fivecells":
       generateFiveCells(p, rng);

@@ -157,8 +157,6 @@ Deno.test("quality guards preserve solvability and uniqueness across 1500 daily/
 });
 Deno.test("Shikaku rejects forced strips and its bounded fallback requires interacting rectangles", () => {
   const p = structuredClone(generate("shikaku", "quality-template"));
-  generateShikaku(p, new ZeroRandom("constant"), true);
-  assert(ambiguousClues(p) === 0, "legacy fixture must expose the trivial layout");
   generateShikaku(p, new ZeroRandom("constant"));
   assertQuality(p);
   const repeat = structuredClone(p);
@@ -167,8 +165,6 @@ Deno.test("Shikaku rejects forced strips and its bounded fallback requires inter
 });
 Deno.test("Dosun rejects unchanged chambers after rejected reshaping attempts", () => {
   const p = structuredClone(generate("dosun", "quality-template"));
-  generateDosun(p, new ZeroRandom("constant"), true);
-  assert(isSolved(p, ceilingAndFloor(p)), "legacy fixture must expose the trivial layout");
   generateDosun(p, new ZeroRandom("constant"));
   assertQuality(p);
   assert(
@@ -179,16 +175,11 @@ Deno.test("Dosun rejects unchanged chambers after rejected reshaping attempts", 
 });
 Deno.test("Mosaic has a bounded fallback even when every proposed board is already solved", () => {
   const p = structuredClone(generate("mosaic", "quality-template"));
-  generateMosaic(p, new HighRandom("constant"), true);
-  assert(isSolved(p, p.initial), "legacy all-white fixture starts solved");
   generateMosaic(p, new HighRandom("constant"));
   assertQuality(p);
 });
 Deno.test("Mosaic rejects the one-shaded-cell layout found by the generator audit", () => {
-  const seed = "2027-01-26", p = structuredClone(generate("mosaic", seed));
-  generateMosaic(p, new Random(`v${GENERATOR_VERSION}:mosaic:${seed}`), true);
-  assert(p.solution.filter((v, i) => v === 1 && !p.initial[i]).length === 1);
-  assertQuality(generate("mosaic", seed));
+  assertQuality(generate("mosaic", "2027-01-26"));
 });
 
 Deno.test("quality guards preserve published daily layouts and completed progress", async () => {

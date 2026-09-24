@@ -14,7 +14,7 @@ for (const kind of ["mambo", "sudoku", "killer"] as const) {
     attempt++
   ) {
     const seed = `number-difficulty-bank:v1:${kind}:${attempt}`, rng = new Random(seed);
-    const p = structuredClone(generate(kind, seed));
+    const p = structuredClone(generate(kind, seed, "hard"));
     const count = () =>
       kind === "mambo" ? countBalance(p.initial, 6, p.links) : countSudoku(p.initial, p.cages);
     for (const i of rng.shuffle(p.initial.flatMap((v, i) => v ? [i] : []))) {

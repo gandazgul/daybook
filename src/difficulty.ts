@@ -1,3 +1,4 @@
+import { archivedDay } from "./puzzle-archive.ts";
 import type { Kind } from "./puzzles.ts";
 import type { StorageLike } from "./storage.ts";
 
@@ -10,32 +11,19 @@ export const DIFFICULTY_LABELS: Record<DifficultyChoice, string> = {
   hard: "Hard",
   classic: "Original",
 };
-// Older daily puzzles keep their original board as the default.
-export const DIFFICULTY_START = "2026-09-15";
-export const GAME_DIFFICULTY_START = "2026-09-19";
-export const NUMBER_PATH_DIFFICULTY_START = "2026-09-25";
 export const DAILY_DIFFICULTIES: Partial<Record<Kind, Difficulty>> = {
   queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard",
 };
 export function supportsDifficulty(kind: Kind) {
   return DAILY_DIFFICULTIES[kind] !== undefined;
 }
-export function difficultyStart(kind: Kind) {
-  return kind === "snap" ? NUMBER_PATH_DIFFICULTY_START
-    : kind === "queens" ? DIFFICULTY_START : GAME_DIFFICULTY_START;
-}
 export function isDifficulty(value: unknown): value is Difficulty {
   return DIFFICULTIES.includes(value as Difficulty);
 }
 export function dailyDifficulty(kind: Kind, date: string): Difficulty | undefined {
-  if (!supportsDifficulty(kind) || date < difficultyStart(kind)) return;
-  if (date >= GAME_DIFFICULTY_START) return DAILY_DIFFICULTIES[kind];
-  // Preserve the published Queens picks from before per-game defaults were introduced.
-  let hash = 2166136261;
-  for (const c of `daily-difficulty:v1:${kind}:${date}`) {
-    hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0;
-  }
-  return DIFFICULTIES[hash % DIFFICULTIES.length];
+  if (!supportsDifficulty(kind)) return;
+  const day = archivedDay(date);
+  return day ? day.defaults[kind] ?? undefined : DAILY_DIFFICULTIES[kind];
 }
 export function difficultyDescription(kind: Kind, level: DifficultyChoice): string {
   if (level === "classic") return "The original daily board, with your existing progress.";

@@ -202,9 +202,24 @@ a complete logical solver for every position.
 - At midnight, the collection updates to the new day; an open puzzle stays on its original date so
   current work is not interrupted.
 
-Changing the generator after release requires preserving the versioned algorithm or introducing a
-new generator version; otherwise archived puzzles would change. Clearing browser data also clears
-your puzzle history. If storage is blocked, the collection shows that progress is temporary.
+Published boards are fixed JSON snapshots in `src/archive/`, covering every date from
+**September 1–25, 2026**, all fourteen kinds, Original boards, and every supported difficulty.
+The calendar starts in September 2026. Archived boards and their daily default difficulties load
+from this bundled data, including offline; later dates and practice use only the current generators.
+Old generator implementations and date-based quality switches have been removed. The existing
+`daybook:v1:progress` storage keys remain unchanged, so entries, notes, time, and completion survive.
+
+Before a future generator or template-bank change, use the currently published, unchanged source
+and run `deno task archive YYYY-MM-DD` through the latest date players can already access. Include
+tomorrow when time zones or a rollout crossing midnight could expose it. This appends daily
+snapshots with the source Git revision, never overwrites existing ones, and refreshes the import
+index. Then edit the current generator, run the checks, and ship the snapshots with the change.
+The command refuses to export new days after source edits. No daily server job or growing collection
+of historical algorithms is needed; only the small puzzle data accumulates. Missing archived boards
+fail to load rather than silently regenerate against a different algorithm.
+
+Clearing browser data also clears your puzzle history. If storage is blocked, the collection shows
+that progress is temporary.
 
 Completed puzzles remain visible, with the success message and next-puzzle button beside the board
 on desktop or below it on smaller screens.
@@ -246,8 +261,9 @@ start from 24 verified boards per game and level, apply rule-preserving symmetri
 clue edits that retain the exact rating. Sudoku also permutes digits, bands, stacks, and rows/columns
 within them. Killer only uses grid symmetries and digit complementing, preserving connected cages
 and their sums. The offline authoring tool is `scripts/build-difficulty-bank.ts`; it writes to a
-separate output file. Published banks and algorithms belong to `difficulty-v1` and must not be
-regenerated or changed in place after release without preserving saved-board identities.
+separate output file. Before changing published banks or algorithms, snapshot all accessible dates with the archive
+command above. The `difficulty-v1` seed namespace stays stable; historical board data preserves
+saved identities without retaining the old algorithm.
 
 Open a daily puzzle and use **Easy / Medium / Hard · Change** to choose another level. Each date and
 level keeps its own board, entries, notes, time, and completion. Finishing **any** level earns that
@@ -376,6 +392,8 @@ port; Compose's published port must match if you change it.
 - `src/main.ts`: Phaser scenes, responsive engine UI, input, themes, and timers.
 - `src/puzzles.ts`: deterministic generators, constraint solvers, validators.
 - `src/extra-puzzles.ts`: generators, solvers, and validators for the three added games.
+- `src/puzzle-archive.ts` / `src/archive/`: fixed daily boards and historical default difficulties.
+- `scripts/archive-puzzles.ts`: append snapshots before replacing a published generator.
 - `src/akari.ts`: Akari generation, uniqueness solver, lighting, conflicts, and rule validation.
 - `src/input.ts`: Sudoku note cleanup and Queens tap/double-tap and drag gesture state.
 - `src/hints.ts`: local deductions and one-move reveals with preview explanations.
@@ -397,7 +415,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **80 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **89 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,

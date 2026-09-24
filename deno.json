@@ -10,6 +10,7 @@
     "preview": "deno run -A npm:vite@7.3.5 preview --host 0.0.0.0",
     "start": "deno run --allow-net --allow-read=dist --allow-env=PORT server.ts",
     "test": "deno test --allow-read=src/service-worker.js tests/",
+    "archive": "deno run --allow-read --allow-write=src/archive --allow-run=git scripts/archive-puzzles.ts",
     "check": "deno check src/main.ts server.ts && deno lint src tests server.ts"
   },
   "compilerOptions": { "lib": ["dom", "dom.iterable", "deno.ns", "esnext"], "strict": true },
