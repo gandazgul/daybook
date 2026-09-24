@@ -15,6 +15,7 @@ import { installDaybook, pwa, startPwa } from "./pwa.ts";
 import { type TutorialStep, tutorialSteps, TutorialStore } from "./tutorials.ts";
 import {
   adjacent,
+  canStepNumberPath,
   generate,
   isSolved,
   type Kind,
@@ -816,7 +817,7 @@ class Daybook extends Phaser.Scene {
     const cols = this.W < 550 ? 2 : 3,
       gap = this.mobile ? 12 : 18,
       cw = (w - gap * (cols - 1)) / cols,
-      ch = this.mobile ? 240 : 234;
+      ch = this.mobile ? (practice ? 164 : 192) : (practice ? 184 : 208);
     kinds.forEach((kind, i) => {
       const x = m + (i % cols) * (cw + gap),
         y = gridY + Math.floor(i / cols) * (ch + gap),
@@ -848,30 +849,10 @@ class Daybook extends Phaser.Scene {
       if (!this.mobile) {
         this.text(x + 16, y + 140, meta.description, 14, c.muted, undefined, cw - 32);
       }
-      const by = y + ch - (this.mobile ? 72 : 50);
-      this.text(
-        x + 16,
-        by,
-        done
-          ? `Complete · ${formatTime(saved.elapsed)}`
-          : saved && saved.elapsed > 0
-          ? "Continue puzzle"
-          : practice
-          ? "Generate & play"
-          : "Ready when you are",
-        14,
-        done ? c.accent : c.muted,
-        undefined,
-        cw - 52,
-      );
-      this.text(x + cw - 23, by - 2, done ? "✓" : "↗", 16, this.tint(kind)).setOrigin(.5, 0);
-      if (supportsDifficulty(kind)) {
-        const choice = difficultyChoices.get(kind, practice ? "practice:" : this.selectedDate)!;
-        this.text(x + 16, y + ch - 25, practice ? "Choose difficulty" :
-          `${choice === (dailyDifficulty(kind, this.selectedDate) ?? "classic") ? "Daily" : "Chosen"} · ${DIFFICULTY_LABELS[choice]}`,
-          12, c.accent, undefined, cw - 32);
-      } else if (practice && (kind === "fivecells" || kind === "mosaic")) {
-        this.text(x + 16, y + ch - 25, "Practice only", 12, c.accent, undefined, cw - 32);
+      if (!practice) {
+        const choice = difficultyChoices.get(kind, this.selectedDate);
+        const level = choice && choice !== "classic" ? DIFFICULTY_LABELS[choice] : "default";
+        this.text(x + 16, y + ch - 25, `Difficulty: ${level}`, 12, c.accent, undefined, cw - 32);
       }
       this.hit(
         x,
@@ -962,8 +943,21 @@ class Daybook extends Phaser.Scene {
         g.lineBetween(x + 5, y + 2 + k * (s - 3) / 3, x + s - 5, y + 2 + k * (s - 3) / 3);
       }
       if (kind === "killer") {
-        this.text(x + 9, y + 6, "12", 9, color);
-        this.text(x + 37, y + 32, "7", 18, color, "Georgia");
+        const cellW = (s - 10) / 3, cellH = (s - 3) / 3;
+        g.lineStyle(1, color);
+        for (const [col, row, cols, rows, sum] of [[0, 0, 2, 1, 12], [1, 1, 2, 2, 20]]) {
+          const left = x + 7 + col * cellW, top = y + 4 + row * cellH;
+          const right = left + cols * cellW - 4, bottom = top + rows * cellH - 4;
+          for (let xx = left; xx < right; xx += 4) {
+            g.lineBetween(xx, top, Math.min(xx + 2, right), top);
+            g.lineBetween(xx, bottom, Math.min(xx + 2, right), bottom);
+          }
+          for (let yy = top; yy < bottom; yy += 4) {
+            g.lineBetween(left, yy, left, Math.min(yy + 2, bottom));
+            g.lineBetween(right, yy, right, Math.min(yy + 2, bottom));
+          }
+          this.text(left + 2, top + 2, String(sum), 8, color);
+        }
       } else {
         this.text(x + 13, y + 7, "3", 15, color);
         this.text(x + 32, y + 27, "8", 15, color);
@@ -2008,6 +2002,7 @@ class Daybook extends Phaser.Scene {
       }
       const boxBorders = this.add.graphics().lineStyle(2, 0x000000);
       boxBorders.strokeRect(x, y, size, size);
+      boxBorders.lineStyle(p.kind === "killer" ? 3 : 2, 0x000000);
       for (let i = 3; i < n; i += 3) {
         boxBorders.lineBetween(x + i * s, y, x + i * s, y + size);
         boxBorders.lineBetween(x, y + i * s, x + size, y + i * s);
@@ -2105,6 +2100,9 @@ class Daybook extends Phaser.Scene {
       if (label.style.testString !== "0123456789") {
         label.setStyle({ testString: "0123456789", lineSpacing: 0 });
       }
+      // Digit-only metrics can leave no descent; reserve texture space for the
+      // antialiased lower edge at fractional font sizes and high display resolutions.
+      if (label.padding.bottom !== 2) label.setPadding(0, 0, 1, 2);
       for (const i of cage.cells) {
         const xx = x + i % n * s, yy = y + (i / n | 0) * s, pad = 3;
         const top = !set.has(i - n), bottom = !set.has(i + n);
@@ -2217,6 +2215,11 @@ class Daybook extends Phaser.Scene {
         g.fillStyle(color).fillCircle(pos.x, pos.y, s * .15);
       });
     }
+    const walls = this.add.graphics().lineStyle(Math.max(3, s * .075), this.C.ink);
+    p.edges.forEach((_, edge) => {
+      const line = this.fiveEdgeSegment(edge);
+      walls.lineBetween(line.x1, line.y1, line.x2, line.y2);
+    });
     p.clues.forEach((v, i) => {
       if (v) {
         const pos = point(i);
@@ -2415,7 +2418,7 @@ class Daybook extends Phaser.Scene {
         }
         return;
       }
-      if (!adjacent(a[a.length - 1], p.size).includes(i)) return;
+      if (!canStepNumberPath(p, a[a.length - 1], i)) return;
       const next = a.filter((j) => p.clues[j] > 0).length + 1;
       if (
         (p.clues[i] && p.clues[i] !== next) ||

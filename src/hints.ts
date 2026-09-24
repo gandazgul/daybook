@@ -1,7 +1,7 @@
 import { findSets, setDescription } from "./sets.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import { fiveCellOptions } from "./extra-puzzles.ts";
-import { adjacent, direction, isSolved, type Puzzle, rectangle, rotate } from "./puzzles.ts";
+import { adjacent, canStepNumberPath, direction, isSolved, type Puzzle, rectangle, rotate } from "./puzzles.ts";
 
 /** Smart hints deliberately cannot access a generated answer. Entries are treated as assumptions. */
 type VisiblePuzzle = Omit<Puzzle, "solution" | "seed">;
@@ -472,7 +472,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
         next = a.filter((i) => p.clues[i] > 0).length + 1,
         last = Math.max(...p.clues);
       const choices = adjacent(tail, n).filter((i) =>
-        !a.includes(i) && (!p.clues[i] || p.clues[i] === next) &&
+        canStepNumberPath(p, tail, i) && !a.includes(i) && (!p.clues[i] || p.clues[i] === next) &&
         (p.clues[i] !== last || a.length === n * n - 1)
       );
       if (!choices.length) {
@@ -486,7 +486,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
           title: "A logical next move",
           text: `From the end of your path, ${
             at(choices[0], n)
-          } is the only unused neighboring square that respects the number order and leaves the final dot until last.`,
+          } is the only reachable unused neighboring square that respects the number order, avoids walls, and leaves the final dot until last.`,
           cells: [tail, choices[0]],
           values: [...a, choices[0]],
         };

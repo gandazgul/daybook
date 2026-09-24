@@ -2,6 +2,7 @@ import { adjacent, type Puzzle, Random } from "./puzzles.ts";
 import type { Difficulty } from "./difficulty.ts";
 import { rateBalance, rateSudoku } from "./logic-ratings.ts";
 import bank from "./number-bank.json" with { type: "json" };
+import { generateRelaxedSudoku, RELAXED_SUDOKU_START } from "./easy-sudoku.ts";
 
 export type NumberKind = "mambo" | "sudoku" | "killer";
 
@@ -58,4 +59,9 @@ export function generateRatedNumberPuzzle(p: Puzzle, rng: Random, difficulty: Di
       if (rating() !== difficulty) p.initial[i] = old;
     }
   }
+  // Published daily boards retain their clues so existing saves remain compatible.
+  if (
+    difficulty === "easy" && (p.kind === "sudoku" || p.kind === "killer") &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(p.seed) || p.seed >= RELAXED_SUDOKU_START)
+  ) generateRelaxedSudoku(p, rng);
 }

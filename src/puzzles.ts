@@ -164,7 +164,7 @@ export const META: Record<
     rules: [
       "Draw one path that visits every square exactly once.",
       "Start at 1, visit the numbered dots in order, and finish at the last number.",
-      "Move between squares that share an edge.",
+      "Move between squares that share an edge. On Hard, thick walls block the path.",
       "Drag or tap adjacent squares to extend the path.",
       "Tap an earlier square on your path to backtrack.",
     ],
@@ -906,9 +906,24 @@ function snap(p: Puzzle, rng: Random) {
   }
   p.solution = path;
   p.clues = Array(n * n).fill(0);
-  const checkpoints = [0, 4, 8, 13, 18, 24];
+  const checkpoints = n === 5 ? [0, 4, 8, 13, 18, 24]
+    : Array.from({ length: 12 }, (_, i) => Math.round(i * (n * n - 1) / 11));
   checkpoints.forEach((i, k) => p.clues[path[i]] = k + 1);
   p.initial = [path[0]];
+  if (p.difficulty === "hard") {
+    // Walls only block unused edges, so the complete route always remains playable.
+    const position = new Map(path.map((cell, i) => [cell, i]));
+    const candidates = path.flatMap((a) => adjacent(a, n).flatMap((b) =>
+      a < b && Math.abs(position.get(a)! - position.get(b)!) !== 1
+        ? [[a, b] as [number, number]] : []
+    ));
+    p.edges = rng.shuffle(candidates).slice(0, 10);
+  }
+}
+/** Number Path edges represent walls; all other shared edges remain traversable. */
+export function canStepNumberPath(p: Pick<Puzzle, "size" | "edges">, from: number, to: number) {
+  return adjacent(from, p.size).includes(to) &&
+    !p.edges.some(([a, b]) => (a === from && b === to) || (a === to && b === from));
 }
 export function validBalance(a: number[], n: number, links: Link[]) {
   for (let axis = 0; axis < 2; axis++) {
@@ -1139,7 +1154,8 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   const existing = cache.get(key);
   if (existing) return existing;
   const rng = new Random(key),
-    size = kind === "queens" && difficulty ? QUEENS_SIZES[difficulty] : kind === "sudoku" || kind === "killer"
+    size = kind === "snap" && difficulty && difficulty !== "easy" ? 7
+      : kind === "queens" && difficulty ? QUEENS_SIZES[difficulty] : kind === "sudoku" || kind === "killer"
       ? 9
       : kind === "atoms" || kind === "sets"
       ? 4
@@ -1193,7 +1209,11 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       break;
     case "nurikabe":
       // Date-version this change so older daily boards and their saved entries stay intact.
-      generateNurikabe(p, rng, /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-11");
+      generateNurikabe(
+        p, rng,
+        /^\d{4}-\d{2}-\d{2}$/.test(seed) && seed < "2026-09-11",
+        !/^\d{4}-\d{2}-\d{2}$/.test(seed) || seed >= "2026-09-25",
+      );
       break;
     case "fivecells":
       generateFiveCells(p, rng);
@@ -1296,7 +1316,7 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
       ) return false;
       const numbers = a.map((i) => p.clues[i]).filter((v) => v > 0);
       return p.clues[a[0]] === 1 && p.clues[a[a.length - 1]] === Math.max(...p.clues) &&
-        a.every((v, i) => !i || adjacent(a[i - 1], n).includes(v)) &&
+        a.every((v, i) => !i || canStepNumberPath(p, a[i - 1], v)) &&
         numbers.every((v, i) => v === i + 1);
     }
     case "mosaic":

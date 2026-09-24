@@ -138,6 +138,9 @@ Deno.test("New Nurikabe daily and practice boards always include a larger island
     const date = new Date(Date.UTC(2026, 8, 11 + i)).toISOString().slice(0, 10);
     for (const seed of [date, `practice:nurikabe-variety-${i}`]) {
       const p = generate("nurikabe", seed);
+      if (seed.startsWith("practice:") || seed >= "2026-09-25") {
+        assert(p.clues.filter((v) => v === 1).length <= 2, `${seed}: too many singleton islands`);
+      }
       assert(p.clues.some((v) => v > 1), `${seed}: all islands are 1`);
       assert(validNurikabe(p.clues, p.solution, p.size), `${seed}: invalid solution`);
       assert(solveNurikabe(p.clues, p.size).count === 1, `${seed}: not unique`);
@@ -154,6 +157,7 @@ Deno.test("Nurikabe fallback has larger islands and a unique solution in every o
     const p = structuredClone(generate("nurikabe", "fallback-template"));
     generateNurikabe(p, new FallbackRandom("force-empty-frontier"));
     assert(p.clues.includes(2) && p.clues.includes(3));
+    assert(p.clues.filter((v) => v === 1).length <= 2);
     assert(validNurikabe(p.clues, p.solution, p.size));
     assert(solveNurikabe(p.clues, p.size).count === 1);
     assert(!isSolved(p, p.initial));
@@ -161,6 +165,7 @@ Deno.test("Nurikabe fallback has larger islands and a unique solution in every o
 });
 Deno.test("Nurikabe preserves published daily clues and saves across the variety change", () => {
   const fixtures = [
+    ["2026-09-24", [0,0,1,0,1,1,0,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,2,0,0]],
     ["2026-09-09", [0,0,0,0,1,0,2,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,4,0]],
     ["2026-09-10", [0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,1]],
     ["2026-09-11", [0,0,4,0,1,0,0,0,0,0,0,0,2,0,1,0,0,0,0,0,0,0,3,0,1]],

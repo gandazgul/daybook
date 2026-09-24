@@ -1,5 +1,5 @@
 import {
-  adjacent,
+  canStepNumberPath,
   GENERATOR_VERSION,
   isSolved,
   type Kind,
@@ -114,7 +114,7 @@ export class ProgressStore {
       case "snap":
         return a.length > 0 && a[0] === p.initial[0] && new Set(a).size === a.length &&
           a.every((v, i) =>
-            v >= 0 && v < p.size ** 2 && (!i || adjacent(a[i - 1], p.size).includes(v))
+            v >= 0 && v < p.size ** 2 && (!i || canStepNumberPath(p, a[i - 1], v))
           ) && a.map((i) => p.clues[i]).filter((v) => v > 0).every((v, i) => v === i + 1);
     }
   }

@@ -344,6 +344,11 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
           "Move horizontally or vertically between squares that share an edge. Diagonal moves are not allowed.",
           [center, center - 1, center + 1, center - n, center + n],
         ),
+        ...(p.edges.length ? [step(
+          "Go around walls",
+          "Thick lines between squares are walls. Your path cannot cross them; find a route around them while following the numbers.",
+          [...new Set(p.edges.flat())],
+        )] : []),
         step(
           "Use every square",
           "Your single path must visit every square exactly once before it finishes. It cannot cross or revisit itself.",

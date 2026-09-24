@@ -315,7 +315,7 @@ export function solveNurikabe(clues: number[], n: number, limit = 2) {
   visit(numbered.map((_, i) => i), 0n, 0n);
   return { count, solution };
 }
-export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false) {
+export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false, capSingletons = true) {
   const n = p.size;
   for (let attempt = 0; attempt < 160; attempt++) {
     const values = Array(n * n).fill(2);
@@ -336,6 +336,7 @@ export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false) {
       values[cell] = 1;
       const islands = groups(values, n, (i) => values[i] === 2);
       if (islands.length < 4 || islands.length > 8 || islands.some((s) => s.length > 4)) continue;
+      if (capSingletons && islands.filter((island) => island.length === 1).length > 2) continue;
       if (!allowAllOnes && islands.every((island) => island.length === 1)) continue;
       const clues = Array(n * n).fill(0);
       islands.forEach((cells) => clues[rng.pick(cells)] = cells.length);
@@ -346,12 +347,16 @@ export function generateNurikabe(p: Puzzle, rng: Random, allowAllOnes = false) {
       return;
     }
   }
-  if (!allowAllOnes) {
+  if (!allowAllOnes || capSingletons) {
     // A solver-verified board from our own generator; symmetry preserves its unique solution.
     // The 2- and 3-cell islands guarantee the fallback also satisfies the variety requirement.
     if (n !== 5) throw new Error("Nurikabe fallback requires a 5 × 5 board");
-    const clues = [2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1];
-    const solution = [2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 2, 1, 2, 1, 2];
+    const clues = capSingletons
+      ? [0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2]
+      : [2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1];
+    const solution = capSingletons
+      ? [1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2]
+      : [2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 2, 1, 1, 1, 1, 2, 1, 2, 1, 2];
     const turns = rng.int(4), mirror = rng.int(2);
     p.clues = Array(n * n).fill(0);
     p.solution = Array(n * n).fill(0);

@@ -89,6 +89,10 @@ a warm tint; conflicting bulbs and impossible numbered clues turn red. Optional 
 required for completion. Smart hints explain clue counts, illuminated exclusions, and the only
 remaining place that can light a square; reveal hints show one bulb or clearing move.
 
+New Nurikabe daily boards from September 25, 2026, and all new practice boards contain at most
+two single-square islands (zero and one are also allowed), including fallback boards. Older daily
+boards keep their original clues and saved progress.
+
 New Nurikabe daily boards from September 11, 2026, and all new practice boards include at least
 one island larger than 1, including the generation fallback. Earlier daily boards remain unchanged
 to preserve saved progress. All new boards still have a solver-checked unique solution.
@@ -207,20 +211,34 @@ on desktop or below it on smaller screens.
 
 ## Difficulty
 
-Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
+Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
 and practice. From **September 19, 2026**, the daily defaults are:
 
 | Game | Daily default | Easy | Medium | Hard |
 | --- | --- | --- | --- | --- |
+| Number Path (from September 25) | Hard | 5 × 5, 6 dots | 7 × 7, 12 dots | 7 × 7, 12 dots and 10 walls |
 | Regional Queens | Hard | 6 × 6, single available squares | 7 × 7, combined unit exclusions | 8 × 8, candidate contradiction trials |
 | Balance | Hard | Direct shape counts, triples, and = / × clues | Compatible row and column patterns | Candidate contradiction trials |
 | Sudoku | Easy | Naked and hidden singles | Naked pairs and locked candidates | Candidate contradiction trials |
 | Killer Sudoku | Easy | Singles and last-cell cage sums | Cage combinations, pairs, and locked candidates | Candidate contradiction trials |
 
-Balance stays 6 × 6; both Sudokus stay 9 × 9. Ratings describe the logical techniques required,
+Number Path levels increase the board size and introduce walls that the path cannot cross. Walls
+leave a complete solution available; hints and saved paths respect them. Original daily boards
+through September 24, 2026 remain unchanged. Its levels describe board features, not solver ratings.
+
+Balance stays 6 × 6; both Sudokus stay 9 × 9. Their ratings, and those for Queens, describe the logical techniques required,
 not measured human solving times. Rating solvers use visible constraints only, never the stored
 answer. Every rated board has a unique solution; Hard needs at least one candidate trial beyond
 Medium deductions, using contradiction proofs without recursive guessing.
+
+From **September 25, 2026**, Easy Sudoku and Killer Sudoku are calibrated for relaxed play.
+Regular Sudoku targets **42 starting digits**, at least **6 immediately available single-candidate
+cells**, and at least **2 rows, columns, or boxes with just one blank**. Killer targets **36 starting
+digits**, at least **6 direct opening moves**, and at least **4 multi-cell cages with just one blank**.
+The generator removes digits only while the entire board remains solvable with single-candidate
+cells and last-cell cage totals; it may retain extra givens to keep those guarantees. Each board
+still has one solution. This applies immediately to new practice boards; older daily boards and
+saves, along with Medium and Hard generation, retain their existing behavior.
 
 Queens starts from 16 verified boards per level, changes connected region boundaries while checking
 uniqueness and rating, then rotates, reflects, and relabels regions. The three number/shape games
