@@ -818,7 +818,7 @@ class Daybook extends Phaser.Scene {
     const cols = this.W < 550 ? 2 : 3,
       gap = this.mobile ? 12 : 18,
       cw = (w - gap * (cols - 1)) / cols,
-      ch = this.mobile ? (practice ? 164 : 192) : (practice ? 184 : 208);
+      ch = this.mobile ? (practice ? 164 : 192) : (practice ? 184 : cw < 224 ? 236 : 208);
     kinds.forEach((kind, i) => {
       const x = m + (i % cols) * (cw + gap),
         y = gridY + Math.floor(i / cols) * (ch + gap),
@@ -838,17 +838,24 @@ class Daybook extends Phaser.Scene {
       this.miniature(kind, x + cw / 2, y + 53, 64);
       if (!practice && kind === pick) this.circle(x + cw - 24, y + 24, 4, this.tint(kind));
       const fs = this.mobile ? 18 : 22;
-      this.text(
+      const title = this.text(
         x + 16,
         y + 108,
         meta.name,
         kind === "killer" && this.mobile ? 16 : fs,
         c.ink,
         "Georgia",
-        cw - 32,
+        cw - (done ? 60 : 32),
       );
+      if (done) {
+        const checkX = x + cw - 25, checkY = y + 108 + fs / 2;
+        this.add.graphics().lineStyle(2.2, c.accent)
+          .beginPath().moveTo(checkX - 7, checkY)
+          .lineTo(checkX - 2, checkY + 5).lineTo(checkX + 7, checkY - 5).strokePath();
+      }
       if (!this.mobile) {
-        this.text(x + 16, y + 140, meta.description, 14, c.muted, undefined, cw - 32);
+        this.text(x + 16, Math.max(y + 140, title.y + title.height + 6),
+          meta.description, 14, c.muted, undefined, cw - 32);
       }
       if (!practice) {
         const choice = difficultyChoices.get(kind, this.selectedDate);
