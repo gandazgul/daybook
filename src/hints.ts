@@ -308,6 +308,62 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
           );
         }
       }
+      const regionIds = [...new Set(p.regions)];
+      const families = [
+        range(n).map((r) => ({ cells: row(r * n), name: `row ${r + 1}` })),
+        range(n).map((c) => ({ cells: col(c), name: `column ${c + 1}` })),
+        regionIds.map((r) => ({
+          cells: all.filter((i) => p.regions[i] === r),
+          name: `region ${String.fromCharCode(65 + r)}`,
+        })),
+      ].map((family) => family
+        .filter(({ cells }) => !cells.some((i) => a[i] === 1))
+        .map((unit) => ({ ...unit, options: unit.cells.filter((i) => !a[i]) })));
+      // Direct queen exclusions were handled above, so every blank is a candidate.
+      // A unit's queen must occupy one of its options, even before we know which.
+      for (const unit of families.flat()) {
+        const excluded = all.find((i) => !a[i] && !unit.cells.includes(i) &&
+          unit.options.every((j) => attacks(i, j)));
+        if (excluded !== undefined) {
+          return put(excluded, 2,
+            `The queen in ${unit.name} must occupy one of its highlighted available squares. Every option rules out ${at(excluded, n)} by sharing a row, column or region, or touching it. Mark this square X.`,
+            [...unit.options, excluded]);
+        }
+      }
+      // Two or three disjoint units confined to equally many units in another
+      // family reserve those units. Mixing source families would double-count queens.
+      for (const count of [2, 3]) {
+        for (const source of families) {
+          const subsets: (typeof source)[] = [];
+          for (let i = 0; i < source.length; i++) {
+            for (let j = i + 1; j < source.length; j++) {
+              if (count === 2) subsets.push([source[i], source[j]]);
+              else for (let k = j + 1; k < source.length; k++) {
+                subsets.push([source[i], source[j], source[k]]);
+              }
+            }
+          }
+          for (const target of families) {
+            if (source === target) continue;
+            for (const subset of subsets) {
+              const options = subset.flatMap((unit) => unit.options);
+              const reserved = target.filter((unit) => unit.options.some((i) => options.includes(i)));
+              if (reserved.length < count) {
+                return problem(
+                  `The queens in ${subset.map((unit) => unit.name).join(", ")} have too few available rows, columns or regions between them. Check the X marks and nearby queens.`,
+                  subset.flatMap((unit) => unit.cells));
+              }
+              if (reserved.length !== count) continue;
+              const excluded = reserved.flatMap((unit) => unit.options).find((i) => !options.includes(i));
+              if (excluded !== undefined) {
+                return put(excluded, 2,
+                  `The ${count} queens in ${subset.map((unit) => unit.name).join(", ")} must use ${reserved.map((unit) => unit.name).join(", ")}, one queen in each. Those places are reserved, so ${at(excluded, n)} cannot hold another queen. Mark it X.`,
+                  [...options, excluded]);
+              }
+            }
+          }
+        }
+      }
       break;
     }
     case "mambo": {
@@ -670,7 +726,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
   return {
     title: "No simple deduction found",
     text:
-      "The logical rules available so far could not prove a next move from this position. That does not mean your board is wrong. You can keep working or choose Reveal one move.",
+      "The logical rules available so far could not prove a next move from this position. That does not mean your board is wrong. You can keep working or choose Reveal move.",
     cells: all,
   };
 }
