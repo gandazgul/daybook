@@ -414,6 +414,57 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
           );
         }
       }
+      // A shape can fit in isolation but leave no way to finish its line. Check
+      // whole lines, including linked empty pairs, without consulting the answer.
+      const lines = units.map((cells, index) => {
+        const links = p.links.filter((link) => cells.includes(link.a) && cells.includes(link.b));
+        const patterns: number[][] = [], pattern: number[] = [];
+        const visit = (circles: number, diamonds: number) => {
+          const k = pattern.length;
+          if (k === n) {
+            if (links.every((link) =>
+              (pattern[cells.indexOf(link.a)] === pattern[cells.indexOf(link.b)]) === link.same)) {
+              patterns.push([...pattern]);
+            }
+            return;
+          }
+          for (const v of a[cells[k]] ? [a[cells[k]]] : [1, 2]) {
+            if ((v === 1 ? circles : diamonds) >= n / 2 ||
+              (k >= 2 && pattern[k - 1] === v && pattern[k - 2] === v)) continue;
+            pattern.push(v);
+            visit(circles + Number(v === 1), diamonds + Number(v === 2));
+            pattern.pop();
+          }
+        };
+        visit(0, 0);
+        return { cells, patterns, links, name: `${index < n ? "Row" : "Column"} ${index % n + 1}` };
+      });
+      const impossible = lines.find(({ patterns }) => !patterns.length);
+      if (impossible) return problem(
+        `${impossible.name} cannot be completed with ${n / 2} circles and ${n / 2} diamonds without making three identical shapes consecutively${impossible.links.length ? " or breaking an = or × clue" : ""}. Check the highlighted entries.`,
+        impossible.cells);
+      for (const { cells, patterns, links, name } of lines) {
+        const k = cells.findIndex((i, k) => !a[i] && patterns.every((p) => p[k] === patterns[0][k]));
+        if (k < 0) continue;
+        const i = cells[k], v = patterns[0][k], other = 3 - v;
+        const remaining = (v: number) => n / 2 - cells.filter((i) => a[i] === v).length;
+        const shapes = (v: number) => `${remaining(v)} more ${v === 1 ? "circle" : "diamond"}${remaining(v) === 1 ? "" : "s"}`;
+        const shape = (v: number) => v === 1 ? "circle" : "diamond";
+        const rejected = cells.map((i) => a[i]);
+        rejected[k] = other;
+        // Explain count-forced triples directly when possible, rather than only
+        // reporting agreement among the legal line arrangements.
+        if (rejected.filter((w) => w === other).length === n / 2) {
+          const forced = rejected.map((w) => w || v);
+          const triple = forced.findIndex((w, j) => j >= 2 && w === forced[j - 1] && w === forced[j - 2]);
+          if (triple >= 0) return put(i, v,
+            `${name} needs ${shapes(1)} and ${shapes(2)}. A ${shape(other)} at ${at(i, n)} would use all its ${shape(other)}s. The remaining blanks would then be ${shape(v)}s, making three consecutive ${shape(v)}s in ${name.startsWith("Row") ? "columns" : "rows"} ${triple - 1}–${triple + 1}. Put a ${shape(v)} there instead.`,
+            cells);
+        }
+        return put(i, v,
+          `${name} needs ${shapes(1)} and ${shapes(2)}. Every way to finish it with no three identical shapes consecutively${links.length ? " and obeying its = and × clues" : ""} puts a ${v === 1 ? "circle" : "diamond"} at ${at(i, n)}. A ${other === 1 ? "circle" : "diamond"} there would leave no valid arrangement for the remaining squares.`,
+          cells);
+      }
       break;
     }
     case "pipes": {
