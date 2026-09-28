@@ -40,6 +40,7 @@ import {
 
 type Page = "today" | "calendar" | "practice" | "game";
 type Modal = "help" | "pause" | "reset" | "settings" | "install" | "tutorial" | "hint" | "difficulty" | null;
+const PAGE_HEADER = { mobileTop: 160, desktopTop: 122, titleOffset: 26 };
 const LIGHT = {
   bg: 0xf6f5ef,
   panel: 0xfdfcf8,
@@ -614,14 +615,15 @@ class Daybook extends Phaser.Scene {
       this.selectedDate = this.today;
       this.go("today");
     }, undefined, { group: "navigation" });
-    const navY = this.mobile ? y + 61 : y + 9;
+    const navY = this.mobile ? y + 58 : y + 3;
     const start = this.mobile ? m : this.W / 2 - 140;
     ([["today", "Today"], ["calendar", "Calendar"], ["practice", "Practice"]] as [Page, string][])
       .forEach(([page, label], i) => {
         const x = start + i * (this.mobile ? 94 : 104), active = this.page === page;
-        this.text(x, navY, label, 14, active ? c.ink : c.muted);
-        if (active) this.line(x, navY + 25, x + label.length * 7, navY + 25, c.accent, 2);
-        this.hit(x - 8, navY - 12, 88, 44, label, () => {
+        const caption = this.text(x, navY, label, this.mobile ? 17 : 20, active ? c.ink : c.muted);
+        const underlineY = navY + caption.height + 7;
+        if (active) this.line(x, underlineY, x + caption.width, underlineY, c.accent, 2);
+        this.hit(x - 8, navY - 9, Math.max(88, caption.width + 16), 44, label, () => {
           if (page === "today") this.selectedDate = this.today;
           this.go(page);
         }, undefined, { group: "navigation", current: active });
@@ -657,7 +659,7 @@ class Daybook extends Phaser.Scene {
       },
       undefined, { group: "navigation" },
     );
-    if (!this.mobile) {
+    if (this.W >= 960) {
       this.text(
         x - 163,
         y + 6,
@@ -783,14 +785,14 @@ class Daybook extends Phaser.Scene {
       w = this.width,
       c = this.C,
       practice = this.page === "practice",
-      top = (this.mobile ? 160 : 122) - this.scrollY;
+      top = (this.mobile ? PAGE_HEADER.mobileTop : PAGE_HEADER.desktopTop) - this.scrollY;
     const kinds = practice ? KINDS : kindsForDate(this.selectedDate);
     const d = parseDate(this.selectedDate),
       date = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
         .toUpperCase();
     this.text(m, top, date, 11, c.accent).setLetterSpacing(1.7);
     const title = this.text(
-      m, top + 26,
+      m, top + PAGE_HEADER.titleOffset,
       practice ? "Follow your curiosity." : this.night ? "Let the day unwind." : "A fresh page for your mind.",
       this.mobile ? 33 : 45, c.ink, "Georgia", this.mobile || practice ? w : w - 344,
     );
@@ -1160,12 +1162,12 @@ class Daybook extends Phaser.Scene {
   }
   drawCalendarPage() {
     const c = this.C, m = this.margin, w = this.width;
-    const top = this.mobile ? 172 : 134;
+    const top = this.mobile ? PAGE_HEADER.mobileTop : PAGE_HEADER.desktopTop;
     this.scrollY = 0;
     this.text(m, top, parseDate(this.selectedDate).toLocaleDateString("en-US", {
       weekday: "long", month: "long", day: "numeric",
     }).toUpperCase(), 11, c.accent).setLetterSpacing(1.7);
-    const title = this.text(m, top + 32, "One day at a time.", this.mobile ? 33 : 45, c.ink, "Georgia", w);
+    const title = this.text(m, top + PAGE_HEADER.titleOffset, "One day at a time.", this.mobile ? 33 : 45, c.ink, "Georgia", w);
     let cy = title.y + title.height + 18;
     // Keep the full six-week calendar visible even on shorter phone screens.
     if (this.H - cy >= 420) {
