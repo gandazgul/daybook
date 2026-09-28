@@ -1,4 +1,5 @@
 import { ARCHIVE_START } from "./puzzle-archive.ts";
+import { AccessibleMenu, type MenuControl } from "./accessible-menu.ts";
 import { ScrollMomentum } from "./scroll.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import {
@@ -31,7 +32,6 @@ import {
 } from "./puzzles.ts";
 import {
   dateKey,
-  featured,
   formatTime,
   parseDate,
   type Progress,
@@ -44,7 +44,7 @@ const LIGHT = {
   bg: 0xf6f5ef,
   panel: 0xfdfcf8,
   ink: 0x292e28,
-  muted: 0x7d8176,
+  muted: 0x656e60,
   line: 0xdcded3,
   accent: 0x566b51,
   soft: 0xe9ede2,
@@ -500,9 +500,10 @@ class Daybook extends Phaser.Scene {
     if (stroke !== undefined) g.lineStyle(1.5, stroke).strokeCircle(x, y, r);
     return g;
   }
-  controls: { x: number; y: number; w: number; h: number; label: string; action: () => void; fixed?: boolean }[] =
+  controls: (MenuControl & { x: number; y: number; w: number; h: number; fixed?: boolean })[] =
     [];
   focused = -1;
+  accessibleMenu?: AccessibleMenu;
   focusOutline?: Phaser.GameObjects.Graphics;
   hit(
     x: number,
@@ -512,6 +513,7 @@ class Daybook extends Phaser.Scene {
     label: string,
     action: () => void,
     hover?: Phaser.GameObjects.Graphics,
+    semantics?: MenuControl["semantics"],
   ) {
     const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
     zone.on("pointerup", (pointer: Phaser.Input.Pointer) => {
@@ -526,7 +528,7 @@ class Daybook extends Phaser.Scene {
       zone.on("pointerover", () => hover.setAlpha(.7));
       zone.on("pointerout", () => hover.setAlpha(1));
     }
-    this.controls.push({ x, y, w, h, label, action });
+    this.controls.push({ x, y, w, h, label, action, semantics });
     return zone;
   }
   button(
@@ -594,6 +596,7 @@ class Daybook extends Phaser.Scene {
     this.scrollY = 0;
     this.focused = -1;
     this.notice = "";
+    this.announce("");
     this.draw();
   }
   logo(x: number, y: number) {
@@ -610,7 +613,7 @@ class Daybook extends Phaser.Scene {
     this.hit(m, y - 7, 165, 45, "Daybook home", () => {
       this.selectedDate = this.today;
       this.go("today");
-    });
+    }, undefined, { group: "navigation" });
     const navY = this.mobile ? y + 61 : y + 9;
     const start = this.mobile ? m : this.W / 2 - 140;
     ([["today", "Today"], ["calendar", "Calendar"], ["practice", "Practice"]] as [Page, string][])
@@ -621,7 +624,7 @@ class Daybook extends Phaser.Scene {
         this.hit(x - 8, navY - 12, 88, 44, label, () => {
           if (page === "today") this.selectedDate = this.today;
           this.go(page);
-        });
+        }, undefined, { group: "navigation", current: active });
       });
     const x = this.W - m - 34;
     this.circle(x + 14, y + 12, 17, c.soft);
@@ -652,6 +655,7 @@ class Daybook extends Phaser.Scene {
         this.settings();
         this.draw();
       },
+      undefined, { group: "navigation" },
     );
     if (!this.mobile) {
       this.text(
@@ -725,6 +729,41 @@ class Daybook extends Phaser.Scene {
     for (const entries of this.textCache.values()) for (const text of entries) text.destroy();
     this.textCache = this.nextTextCache || new Map();
     this.nextTextCache = undefined;
+    this.syncAccessibleMenu();
+  }
+  focusMenuControl(index: number) {
+    this.focused = index;
+    const control = this.controls[index];
+    if (control) {
+      if (control.y < 12) this.scrollTo(this.scrollY + control.y - 12);
+      else if (control.y + control.h > this.H - 12) {
+        this.scrollTo(this.scrollY + control.y + control.h - this.H + 12);
+      }
+    }
+    this.drawFocus();
+  }
+  syncAccessibleMenu() {
+    this.accessibleMenu ??= new AccessibleMenu(document.getElementById("game")!);
+    const canvas = this.game.canvas;
+    if (this.page === "game" || this.modal) {
+      canvas.removeAttribute("aria-hidden");
+      canvas.tabIndex = 0;
+      if (this.accessibleMenu.hide()) canvas.focus({ preventScroll: true });
+      return;
+    }
+    const returningFromCanvas = document.activeElement === canvas;
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.tabIndex = -1;
+    const date = parseDate(this.selectedDate).toLocaleDateString("en-US", { dateStyle: "full" });
+    const practice = this.page === "practice";
+    const title = this.page === "calendar" ? "One day at a time." : practice ? "Follow your curiosity."
+      : this.night ? "Let the day unwind." : "A fresh page for your mind.";
+    const summary = practice ? "Freshly generated puzzles, whenever you feel like it."
+      : `${date}. ${store.count(this.selectedDate)} of ${kindsForDate(this.selectedDate).length} completed.`;
+    this.accessibleMenu.update(`${this.page}/${this.selectedDate}`, title,
+      `${summary} ${practice ? "Practice games last for this session." : store.available ? "Saved on this device." : "Storage unavailable; progress is temporary."}`,
+      this.controls, (index) => this.focusMenuControl(index));
+    if (returningFromCanvas) this.accessibleMenu.focusHeading();
   }
   drawFocus() {
     this.focusOutline?.destroy();
@@ -744,137 +783,82 @@ class Daybook extends Phaser.Scene {
       w = this.width,
       c = this.C,
       practice = this.page === "practice",
-      top = (this.mobile ? 172 : 134) - this.scrollY;
+      top = (this.mobile ? 160 : 122) - this.scrollY;
     const kinds = practice ? KINDS : kindsForDate(this.selectedDate);
     const d = parseDate(this.selectedDate),
       date = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
         .toUpperCase();
-    this.text(m, top, date, 11, c.accent)
-      .setLetterSpacing(1.7);
+    this.text(m, top, date, 11, c.accent).setLetterSpacing(1.7);
     const title = this.text(
-      m,
-      top + 32,
-      practice
-        ? "Follow your curiosity."
-        : this.night
-        ? "Let the day unwind."
-        : "A fresh page for your mind.",
-      this.mobile ? 33 : 45,
-      c.ink,
-      "Georgia",
-      this.mobile || practice ? w : w - 320,
+      m, top + 26,
+      practice ? "Follow your curiosity." : this.night ? "Let the day unwind." : "A fresh page for your mind.",
+      this.mobile ? 33 : 45, c.ink, "Georgia", this.mobile || practice ? w : w - 344,
     );
-    const description = this.text(
-      m,
-      Math.max(top + (this.mobile ? 89 : 98), title.y + title.height + 16),
-      practice
-        ? "Freshly generated puzzles, whenever you feel like it."
-        : `${kinds.length} little challenges. Take your time.`,
-      this.mobile ? 16 : 18,
-      c.muted,
-      undefined,
-      this.mobile || practice ? w : w - 335,
-    );
-    const progressY = Math.max(
-      top + (this.mobile ? 139 : 149),
-      description.y + description.height + 30,
-    );
-    if (!practice) {
-      const completed = store.count(this.selectedDate), py = progressY;
+    let gridY: number;
+    if (practice) {
+      const description = this.text(m, title.y + title.height + 12,
+        "Freshly generated puzzles, whenever you feel like it.",
+        this.mobile ? 16 : 18, c.muted, undefined, w);
+      gridY = description.y + description.height + 24;
+    } else {
+      const completed = store.count(this.selectedDate), py = title.y + title.height + 22;
       for (let i = 0; i < kinds.length; i++) {
-        this.circle(
-          m + 5 + i * (this.mobile ? 12 : 20),
-          py + 5,
-          4,
-          i < completed ? c.accent : c.line,
-        );
+        this.circle(m + 5 + i * (this.mobile ? 12 : 20), py + 5, 4,
+          i < completed ? c.accent : c.line);
       }
-      this.text(
-        m + kinds.length * (this.mobile ? 12 : 20) + 14,
-        py - 2,
-        `${completed} of ${kinds.length} completed`,
-        14,
-        c.muted,
-      );
-      if (!this.mobile) this.miniCalendar(m + w - 274, top - 8, 274);
+      this.text(m + kinds.length * (this.mobile ? 12 : 20) + 14, py - 2,
+        `${completed} of ${kinds.length} completed`, 14, c.muted);
+      gridY = py + 36;
+      if (!this.mobile) {
+        const calendarBottom = this.miniCalendar(m + w - 308, top - 8, 308);
+        gridY = Math.max(gridY, calendarBottom + 24);
+      }
     }
-    let gridY = Math.max(
-      top + (practice ? (this.mobile ? 152 : 185) : (this.mobile ? 195 : 260)),
-      practice ? description.y + description.height + 40 : progressY + 56,
-    );
-    if (!practice) this.text(m, gridY, "YOUR DAILY COLLECTION", 11, c.muted)
-      .setLetterSpacing(1.6);
-    const pick = featured(this.selectedDate);
-    if (!this.mobile && !practice) {
-      this.text(
-        m + w,
-        gridY,
-        `Today’s pick  /  ${META[pick].name}`,
-        12,
-        c.muted,
-      ).setOrigin(1, 0);
-    }
-    if (!practice) gridY += 34;
     const cols = this.W < 550 ? 2 : 3,
       gap = this.mobile ? 12 : 18,
       cw = (w - gap * (cols - 1)) / cols,
-      ch = this.mobile ? (practice ? 164 : 192) : (practice ? 184 : cw < 224 ? 236 : 208);
+      previewHeight = this.mobile ? 60 : 72,
+      titleY = previewHeight + 28,
+      fs = this.mobile ? 18 : 22;
+    // Measure actual text so narrow cards and completion checks never collide with copy.
+    const labels = kinds.map((kind) => {
+      const done = !practice && store.dailyProgress(this.selectedDate, kind)?.completed;
+      const titleWidth = cw - (done ? 52 : 32);
+      const name = kind === "dosun" && titleWidth < 150 ? "Dosun-\nFuwari" : META[kind].name;
+      const heading = this.text(0, 0, name, fs, c.ink, "Georgia", titleWidth);
+      const description = this.text(0, 0, META[kind].description, 14, c.muted, undefined, cw - 32);
+      return { heading, description, done };
+    });
+    const ch = Math.max(...labels.map(({ heading, description }) =>
+      titleY + heading.height + 8 + description.height + (practice ? 18 : 46)));
     kinds.forEach((kind, i) => {
       const x = m + (i % cols) * (cw + gap),
         y = gridY + Math.floor(i / cols) * (ch + gap),
         meta = META[kind],
-        saved = practice ? undefined : store.dailyProgress(this.selectedDate, kind),
-        done = saved?.completed;
-      const card = this.box(
-        x,
-        y,
-        cw,
-        ch,
-        c.panel,
-        undefined,
-        0,
-      );
-      this.box(x + 14, y + 14, cw - 28, 80, this.pale(kind), undefined, 0);
-      this.miniature(kind, x + cw / 2, y + 53, 64);
-      if (!practice && kind === pick) this.circle(x + cw - 24, y + 24, 4, this.tint(kind));
-      const fs = this.mobile ? 18 : 22;
-      const title = this.text(
-        x + 16,
-        y + 108,
-        meta.name,
-        kind === "killer" && this.mobile ? 16 : fs,
-        c.ink,
-        "Georgia",
-        cw - (done ? 60 : 32),
-      );
+        { heading, description, done } = labels[i];
+      const card = this.box(x, y, cw, ch, c.panel, undefined, 0);
+      this.box(x + 14, y + 14, cw - 28, previewHeight, this.pale(kind), undefined, 0);
+      this.miniature(kind, x + cw / 2, y + 14 + previewHeight / 2, this.mobile ? 50 : 60);
+      heading.setPosition(x + 16, y + titleY);
+      description.setPosition(x + 16, heading.y + heading.height + 8);
+      this.children.bringToTop(heading);
+      this.children.bringToTop(description);
       if (done) {
-        const checkX = x + cw - 25, checkY = y + 108 + fs / 2;
+        const checkX = x + cw - 25, checkY = y + titleY + fs / 2;
         this.add.graphics().lineStyle(2.2, c.accent)
           .beginPath().moveTo(checkX - 7, checkY)
           .lineTo(checkX - 2, checkY + 5).lineTo(checkX + 7, checkY - 5).strokePath();
       }
-      if (!this.mobile) {
-        this.text(x + 16, Math.max(y + 140, title.y + title.height + 6),
-          meta.description, 14, c.muted, undefined, cw - 32);
-      }
+      const choice = difficultyChoices.get(kind, this.selectedDate);
+      const level = choice && choice !== "classic" ? DIFFICULTY_LABELS[choice] : "default";
       if (!practice) {
-        const choice = difficultyChoices.get(kind, this.selectedDate);
-        const level = choice && choice !== "classic" ? DIFFICULTY_LABELS[choice] : "default";
         this.text(x + 16, y + ch - 25, `Difficulty: ${level}`, 12, c.accent, undefined, cw - 32);
       }
-      this.hit(
-        x,
-        y,
-        cw,
-        ch,
-        `${meta.name}${done ? ", completed" : ""}`,
-        () => {
-          const seed = practice ? `practice:${crypto.randomUUID()}` : this.selectedDate;
-          if (practice && supportsDifficulty(kind)) this.openDifficulty(kind, seed);
-          else this.openGame(kind, seed);
-        },
-        card,
-      );
+      this.hit(x, y, cw, ch, `${meta.name}${done ? ", completed" : ""}`, () => {
+        const seed = practice ? `practice:${crypto.randomUUID()}` : this.selectedDate;
+        if (practice && supportsDifficulty(kind)) this.openDifficulty(kind, seed);
+        else this.openGame(kind, seed);
+      }, card, { group: "puzzles", description: `${meta.description}${practice ? "" : ` Difficulty: ${level}.`}` });
     });
     const end = gridY + Math.ceil(kinds.length / cols) * (ch + gap) + 19;
     this.line(m, end, m + w, end);
@@ -1099,18 +1083,22 @@ class Daybook extends Phaser.Scene {
   }
   miniCalendar(x: number, y: number, w: number) {
     const c = this.C, d = parseDate(this.selectedDate);
-    this.box(x, y, w, 221, c.panel, c.line, 10);
+    const first = (new Date(d.getFullYear(), d.getMonth(), 1).getDay() + 6) % 7;
+    const days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const height = 84 + Math.ceil((first + days) / 7) * 34;
+    this.box(x, y, w, height, c.panel, c.line, 10);
     this.text(
       x + 18,
       y + 17,
       d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
-      15,
+      17,
       c.ink,
       "Georgia",
     );
     this.text(x + w - 24, y + 17, "↗", 16, c.muted);
-    this.hit(x + 10, y + 7, w - 20, 34, "Open calendar", () => this.go("calendar"));
-    this.calendarGrid(x + 17, y + 55, w - 34, d.getFullYear(), d.getMonth(), 25, true);
+    this.hit(x + 10, y + 7, w - 20, 40, "Open calendar", () => this.go("calendar"), undefined, { group: "calendar" });
+    this.calendarGrid(x + 17, y + 55, w - 34, d.getFullYear(), d.getMonth(), 34, true);
+    return y + height;
   }
   calendarGrid(
     x: number,
@@ -1126,7 +1114,7 @@ class Daybook extends Phaser.Scene {
       first = (new Date(year, month, 1).getDay() + 6) % 7,
       days = new Date(year, month + 1, 0).getDate();
     ["M", "T", "W", "T", "F", "S", "S"].forEach((d, i) =>
-      this.text(x + cw * (i + .5), y, d, small ? 9 : 16, c.muted).setOrigin(.5, 0)
+      this.text(x + cw * (i + .5), y, d, small ? 12 : 16, c.muted).setOrigin(.5, 0)
     );
     for (let day = 1; day <= days; day++) {
       const slot = first + day - 1,
@@ -1136,19 +1124,19 @@ class Daybook extends Phaser.Scene {
         done = store.count(key),
         future = key > this.today || key < ARCHIVE_START,
         selected = key === this.selectedDate;
-      if (selected) this.circle(dx, dy + 8, small ? 11 : Math.min(22, rowH * .48, cw * .45), c.accent);
-      else if (done === kindsForDate(key).length) this.circle(dx, dy + 8, small ? 11 : Math.min(22, rowH * .48, cw * .45), c.soft);
+      if (selected) this.circle(dx, dy + 8, small ? 14 : Math.min(22, rowH * .48, cw * .45), c.accent);
+      else if (done === kindsForDate(key).length) this.circle(dx, dy + 8, small ? 14 : Math.min(22, rowH * .48, cw * .45), c.soft);
       this.text(
         dx,
         dy + 8,
         String(day),
-        small ? 11 : 22,
+        small ? 14 : 22,
         selected ? c.bg : future ? blend(c.bg, c.muted, .45) : c.ink,
       ).setOrigin(.5);
       if (!selected && (done > 0 || store.started(key))) {
         this.circle(
           dx + (!small && rowH < 38 ? cw * .39 : 0),
-          dy + (small ? 17 : rowH < 38 ? 8 : 8 + rowH * .4),
+          dy + (small ? 23 : rowH < 38 ? 8 : 8 + rowH * .4),
           small ? 1.5 : 4,
           done === kindsForDate(key).length ? c.accent : done > 0 ? this.tint("shikaku") : c.muted,
         );
@@ -1164,6 +1152,7 @@ class Daybook extends Phaser.Scene {
             this.selectedDate = key;
             this.go("today");
           },
+          undefined, { group: "calendar", date: key, current: selected },
         );
       }
     }
@@ -1211,6 +1200,9 @@ class Daybook extends Phaser.Scene {
       this.month.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
       this.mobile ? 18 : 24, c.ink, "Georgia").setOrigin(.5);
     if (month.width > monthWidth) month.setScale(monthWidth / month.width);
+    for (const control of this.controls) {
+      if (!control.semantics?.group) control.semantics = { group: "calendar" };
+    }
     const gridY = cy + 96, legendY = cy + calendarHeight - 24;
     // Always reserve six weeks so navigating months never moves the controls.
     const rowH = Math.min(46, (legendY - 12 - gridY - 22) / 6);
@@ -1460,8 +1452,8 @@ class Daybook extends Phaser.Scene {
     this.children.bringToTop(body);
     const buttonY = cardY + height - pad - 42, buttonWidth = (textWidth - 10) / 2;
     if (inHint) {
-      this.button(cardX + pad, buttonY, buttonWidth, 42, this.hint ? "Hints" : "Smart hint",
-        () => this.openHint(this.hint ? undefined : "smart"));
+      this.button(cardX + pad, buttonY, buttonWidth, 42, this.hint ? "Reveal move" : "Smart hint",
+        () => this.openHint(this.hint ? "reveal" : "smart"));
       this.button(cardX + pad + buttonWidth + 10, buttonY, buttonWidth, 42,
         this.hint ? this.hint.values ? "Apply move" : "Close" : "Reveal move",
         () => this.hint ? this.hint.values ? this.applyHint() : this.closeHint() : this.openHint("reveal"), true);
@@ -2543,6 +2535,8 @@ class Daybook extends Phaser.Scene {
     this.changed();
   }
   key(e: KeyboardEvent) {
+    // Collection and calendar controls use native browser keyboard behavior.
+    if (this.page !== "game" && !this.modal) return;
     this.scrollMomentum.stop();
     // Phaser can replay queued DOM events before the next frame clears its queue.
     if (this.handledKeys.has(e)) return;

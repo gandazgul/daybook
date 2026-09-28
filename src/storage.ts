@@ -28,14 +28,6 @@ export function parseDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d, 12);
 }
-export function dayIndex(key: string) {
-  const [y, m, d] = key.split("-").map(Number);
-  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
-}
-export function featured(key: string): Kind {
-  const kinds = kindsForDate(key);
-  return kinds[((dayIndex(key) % kinds.length) + kinds.length) % kinds.length];
-}
 export function formatTime(seconds: number) {
   const s = Math.floor(seconds);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Accessible menu browser regressions</title>
+<h1>Accessible menu browser regressions</h1>
+<p>Run through the Vite development server at /tests/accessible-menu.html.</p>
+<output id="result" role="status">Running…</output>
+<main id="fixture"></main>
+<script type="module">
+  import { AccessibleMenu } from "../src/accessible-menu.ts";
+  const fixture = document.querySelector("#fixture");
+  const menu = new AccessibleMenu(fixture);
+  let passed = 0, activated = 0, focused = -1;
+  const assert = (condition, message) => {
+    if (!condition) throw new Error(message);
+    passed++;
+  };
+  const controls = [
+    { label: "Today", action() {}, semantics: { group: "navigation", current: true } },
+    ...Array.from({length: 10}, (_, i) => ({
+      label: `Day ${i + 1}`, action() {},
+      semantics: { group: "calendar", date: `2026-09-${i + 1}`, current: i === 9 },
+    })),
+    { label: "Pipes", action: () => activated++, semantics: { group: "puzzles", description: "Connect the water." } },
+  ];
+  const render = (view = "today", summary = "0 of 12 completed") =>
+    menu.update(view, "Daily puzzles", summary, controls, index => focused = index);
+  const button = label => [...fixture.querySelectorAll("button")].find(b => b.textContent === label);
+  const key = (element, value) => {
+    const event = new KeyboardEvent("keydown", {key: value, bubbles: true, cancelable: true});
+    element.dispatchEvent(event);
+    return event;
+  };
+  try {
+    render();
+    assert(fixture.querySelector("nav[aria-label='Main navigation']"), "Named native navigation missing");
+    assert(fixture.querySelector("h1").textContent === "Daily puzzles", "Page heading missing");
+    assert([...fixture.querySelectorAll("button")].filter(b => b.tabIndex === 0).map(b => b.textContent).join() === "Today,Pipes,Day 10", "Tab order must reach puzzles before one calendar stop");
+    assert(document.getElementById(button("Pipes").getAttribute("aria-describedby")).textContent === "Connect the water.", "Puzzle description must label the control");
+    button("Pipes").focus();
+    assert(focused === 11, "Focus callback must identify the matching canvas card");
+    assert(!key(button("Pipes"), "Tab").defaultPrevented, "Native Tab exit must stay available");
+    const original = button("Pipes");
+    controls[11].action = () => activated += 2;
+    render();
+    assert(button("Pipes") === original && document.activeElement === original, "Unchanged redraw must preserve the focused DOM node");
+    button("Pipes").click();
+    assert(activated === 2, "Button must invoke the latest action exactly once");
+    render("today", "1 of 12 completed");
+    assert(document.activeElement === button("Pipes"), "Changed status must preserve focus on the same control");
+    button("Day 10").focus();
+    assert(key(button("Day 10"), "ArrowUp").defaultPrevented && document.activeElement === button("Day 3"), "ArrowUp must move back one week");
+    assert(button("Day 3").tabIndex === 0 && button("Day 10").tabIndex === -1, "Calendar must retain just one Tab stop");
+    key(button("Day 3"), "Home");
+    assert(document.activeElement === button("Day 1"), "Home must reach first available date");
+    key(button("Day 1"), "End");
+    assert(document.activeElement === button("Day 10"), "End must reach last available date");
+    render("practice");
+    assert(document.activeElement === fixture.querySelector("h1"), "Changing pages must focus the new heading");
+    assert(menu.hide() && fixture.firstElementChild.hidden, "Entering a puzzle must hide menu controls and report focus transfer");
+    document.querySelector("#result").textContent = `${passed} checks passed`;
+  } catch (error) {
+    document.querySelector("#result").textContent = `FAILED after ${passed} checks: ${error.message}`;
+    throw error;
+  }
+</script>
+</html>

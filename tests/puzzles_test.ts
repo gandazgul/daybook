@@ -7,15 +7,12 @@ import {
   generate,
   isSolved,
   KINDS,
-  kindsForDate,
   mosaicClueConflict,
   Random,
   rotate,
 } from "../src/puzzles.ts";
 import {
   dateKey,
-  dayIndex,
-  featured,
   formatTime,
   ProgressStore,
   STORAGE_KEY,
@@ -53,17 +50,12 @@ Deno.test("consecutive days and practice produce fresh content", () => {
     );
     assert(generate(kind, "practice:one").seed === "practice:one");
   }
-  assert(
-    new Set(Array.from({ length: kindsForDate("2026-09-14").length }, (_, i) => featured(`2026-09-${14 + i}`))).size ===
-      kindsForDate("2026-09-14").length,
-  );
 });
 Deno.test("rotation, RNG, date and duration boundaries", () => {
   for (let mask = 1; mask < 16; mask++) assert(rotate(rotate(rotate(rotate(mask)))) === mask);
   const a = new Random("seed"), b = new Random("seed");
   for (let i = 0; i < 20; i++) assert(a.next() === b.next());
   assert(dateKey(new Date(2026, 0, 3)) === "2026-01-03");
-  assert(dayIndex("2026-03-09") - dayIndex("2026-03-08") === 1);
   assert(formatTime(3601.7) === "60:01");
 });
 Deno.test("validators reject invalid complete boards and altered fixed clues", () => {

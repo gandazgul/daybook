@@ -10,7 +10,7 @@ import {
   validFiveCells,
   validNurikabe,
 } from "../src/extra-puzzles.ts";
-import { featured, ProgressStore, STORAGE_KEY } from "../src/storage.ts";
+import { ProgressStore, STORAGE_KEY } from "../src/storage.ts";
 function assert(ok: unknown, message = "Assertion failed"): asserts ok {
   if (!ok) throw new Error(message);
 }
@@ -115,7 +115,6 @@ Deno.test("new games persist marks/borders and preserve old calendar completion"
     store.save(p.seed, kind, progress);
   }
   assert(store.count("2026-09-08") === 8);
-  assert(!["dosun", "nurikabe", "fivecells"].includes(featured("2026-09-08")));
   for (const kind of ["dosun", "nurikabe", "fivecells"] as const) {
     const p = generate(kind, "2026-09-09"), progress = store.load(p);
     progress.values = [...p.solution];

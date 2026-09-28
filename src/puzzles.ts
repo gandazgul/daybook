@@ -72,7 +72,7 @@ export const META: Record<
   sudoku: {
     name: "Sudoku",
     category: "THE CLASSIC",
-    description: "A place for every number.",
+    description: "Fill each row, column and box with 1–9.",
     rules: [
       "Fill every row, column, and 3 × 3 box with 1–9, using each number exactly once.",
       "Fixed clues cannot be changed.",
@@ -88,7 +88,7 @@ export const META: Record<
   pipes: {
     name: "Pipes",
     category: "FIND THE FLOW",
-    description: "A twist. A turn. A connection.",
+    description: "Turn the pipes to connect the water.",
     rules: [
       "Connect every pipe and endpoint to the filled water source.",
       "Every pipe opening must meet another pipe: no leaks or loose ends.",
@@ -101,7 +101,7 @@ export const META: Record<
   atoms: {
     name: "Atoms",
     category: "MAKE A CONNECTION",
-    description: "Little bonds. One molecule.",
+    description: "Join the atoms with the right number of bonds.",
     rules: [
       "Connect all atoms into one connected network.",
       "Each atom needs exactly the number of bonds printed inside it.",
@@ -115,7 +115,7 @@ export const META: Record<
   killer: {
     name: "Killer Sudoku",
     category: "THE SUM OF THINGS",
-    description: "The classic, with a little extra.",
+    description: "Solve Sudoku with sums inside each cage.",
     rules: [
       "Fill every row, column, and 3 × 3 box with 1–9, using each number exactly once.",
       "The numbers in each outlined cage must add up to its small corner clue.",
@@ -132,7 +132,7 @@ export const META: Record<
   queens: {
     name: "Regional Queens",
     category: "A LITTLE STRATEGY",
-    description: "Give every queen her space.",
+    description: "Place one queen in each row, column and region.",
     rules: [
       "Place exactly one queen in each row, column, and colored region.",
       "Queens cannot touch, including diagonally.",
@@ -147,7 +147,7 @@ export const META: Record<
   shikaku: {
     name: "Shikaku",
     category: "DIVIDE & DISCOVER",
-    description: "Everything in its own rectangle.",
+    description: "Divide the grid into numbered rectangles.",
     rules: [
       "Cover the entire grid with rectangles, without gaps or overlaps.",
       "Every rectangle must contain exactly one numbered clue.",
@@ -161,7 +161,7 @@ export const META: Record<
   snap: {
     name: "Number Path",
     category: "FOLLOW THE THREAD",
-    description: "One line to bring it all together.",
+    description: "Visit every square along one numbered path.",
     rules: [
       "Draw one path that visits every square exactly once.",
       "Start at 1, visit the numbered dots in order, and finish at the last number.",
@@ -175,7 +175,7 @@ export const META: Record<
   mambo: {
     name: "Balance",
     category: "FIND YOUR BALANCE",
-    description: "Two shapes. A perfect balance.",
+    description: "Balance circles and diamonds in every line.",
     rules: [
       "Fill each row and column with three circles and three diamonds.",
       "Never place three identical shapes consecutively, horizontally or vertically.",
@@ -189,7 +189,7 @@ export const META: Record<
   sets: {
     name: "Sets",
     category: "SAME & DIFFERENT",
-    description: "Eight cards. Three connections.",
+    description: "Find three sets of matching or differing cards.",
     rules: [
       "Find all three different sets among the eight cards. Each set contains three cards.",
       "For each feature—number, shape, color and fill—the three cards must be all the same or all different.",
@@ -205,7 +205,7 @@ export const META: Record<
   mosaic: {
     name: "Mosaic",
     category: "PIECE BY PIECE",
-    description: "A small picture in the numbers.",
+    description: "Shade squares to match the nearby clues.",
     rules: [
       "Each clue must equal the number of shaded squares in its surrounding 3 × 3 area.",
       "Include the clue’s own square. At the edges, count only squares inside the grid.",
@@ -219,7 +219,7 @@ export const META: Record<
   dosun: {
     name: "Dosun-Fuwari",
     category: "RISE & REST",
-    description: "A little lift. A little gravity.",
+    description: "Support balloons and weights in each region.",
     rules: [
       "Place one white balloon and one black weight in every outlined region.",
       "A balloon needs the top edge, a rock, or another balloon directly above it.",
@@ -235,7 +235,7 @@ export const META: Record<
   nurikabe: {
     name: "Nurikabe",
     category: "ISLANDS & SEA",
-    description: "Find the shape of the shoreline.",
+    description: "Build numbered islands in a connected sea.",
     rules: [
       "Each numbered island must contain exactly as many cells as its clue.",
       "An island’s cells must connect along their sides and contain exactly one clue.",
@@ -250,7 +250,7 @@ export const META: Record<
   fivecells: {
     name: "Five Cells",
     category: "FIVE AT A TIME",
-    description: "Little shapes. A perfect fit.",
+    description: "Divide the grid into groups of five cells.",
     rules: [
       "Every region must contain exactly five cells.",
       "Cells in a region must connect along their sides. Cover the entire grid.",
@@ -265,7 +265,7 @@ export const META: Record<
   akari: {
     name: "Akari",
     category: "LIGHT THE WAY",
-    description: "A little light in every square.",
+    description: "Place bulbs to light every white square.",
     rules: [
       "Light every white square by placing bulbs in white squares.",
       "A bulb lights its own square and shines along its row and column until a black square or the edge.",
