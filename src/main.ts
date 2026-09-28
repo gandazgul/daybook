@@ -817,7 +817,8 @@ class Daybook extends Phaser.Scene {
     const cols = this.W < 550 ? 2 : 3,
       gap = this.mobile ? 12 : 18,
       cw = (w - gap * (cols - 1)) / cols,
-      previewHeight = this.mobile ? 60 : 72,
+      // Fixed-coordinate miniatures need room for their strokes and number labels.
+      previewHeight = this.mobile ? 84 : 96,
       titleY = previewHeight + 28,
       fs = this.mobile ? 18 : 22;
     // Measure actual text so narrow cards and completion checks never collide with copy.
