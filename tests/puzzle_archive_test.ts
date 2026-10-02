@@ -1,6 +1,6 @@
 import snapshots from "../src/archive/index.ts";
 import { ARCHIVE_END, ARCHIVE_START, archivedDay, archivedPuzzle } from "../src/puzzle-archive.ts";
-import { dailyDifficulty, DIFFICULTIES, supportsDifficulty } from "../src/difficulty.ts";
+import { dailyDifficulty, DIFFICULTIES } from "../src/difficulty.ts";
 import { generate, isSolved, KINDS } from "../src/puzzles.ts";
 import { ProgressStore, STORAGE_KEY } from "../src/storage.ts";
 
@@ -34,8 +34,10 @@ Deno.test("every archived variant preserves board identity, saved entries, notes
     assert(day.schema === 1 && /^[a-f0-9]{40}$/.test(day.revision));
     let count = 0;
     for (const kind of KINDS) {
-      assert(dailyDifficulty(kind, day.date) === (day.defaults[kind] ?? undefined));
-      for (const level of [undefined, ...(supportsDifficulty(kind) ? DIFFICULTIES : [])]) {
+      assert(dailyDifficulty(kind, day.date) === (kind === "shikaku" && day.date >= "2026-10-02" ? "hard" : day.defaults[kind] ?? undefined));
+      // Archives cover the levels that had actually shipped at their capture date.
+      const shippedLevels = DIFFICULTIES.filter((level) => !!day.puzzles[`${kind}/${level}`]);
+      for (const level of [undefined, ...shippedLevels]) {
         const expected = day.puzzles[`${kind}/${level ?? "classic"}`];
         const p = generate(kind, day.date, level);
         assert(p.kind === kind && p.seed === day.date && p.difficulty === level);

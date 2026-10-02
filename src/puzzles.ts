@@ -1,3 +1,7 @@
+import { countShikaku, shikakuOptions, shikakuRectangleError, type ShikakuShape } from "./shikaku.ts";
+export { countShikaku, shikakuOptions } from "./shikaku.ts";
+import { SHIKAKU_SIZES } from "./shikaku.ts";
+import { generateShapeShikaku } from "./shikaku-difficulty.ts";
 import { archivedPuzzle } from "./puzzle-archive.ts";
 import { findSets, generateSets } from "./sets.ts";
 import { generateAkari, validAkari } from "./akari.ts";
@@ -150,8 +154,10 @@ export const META: Record<
     description: "Divide the grid into numbered rectangles.",
     rules: [
       "Cover the entire grid with rectangles, without gaps or overlaps.",
-      "Every rectangle must contain exactly one numbered clue.",
-      "Its number of cells must equal that clue.",
+      "Every rectangle must contain exactly one clue, with or without a number.",
+      "If a clue has a number, its rectangle must contain exactly that many cells.",
+      "Shape clues require a square, a wide rectangle (wider than tall), or a tall rectangle (taller than wide). Overlapping squares mean any rectangle.",
+      "A shape clue without a number leaves the area to you. Rectangles always have straight sides; irregular shapes are not allowed.",
       "Drag between opposite corners, or tap one corner and then the other.",
       "Tap a placed rectangle to remove it.",
     ],
@@ -225,8 +231,8 @@ export const META: Record<
       "A balloon needs the top edge, a rock, or another balloon directly above it.",
       "A weight needs the bottom edge, a rock, or another weight directly below it.",
       "Region borders do not support balloons or weights.",
-      "Tap to cycle balloon → weight → X note → clear.",
-      "X marks are optional. Unused squares can stay blank.",
+      "Tap to cycle balloon → weight → empty.",
+      "Unused squares stay blank.",
       "Rocks cannot be changed.",
     ],
     color: 0x86734f,
@@ -318,6 +324,7 @@ export interface Link {
 export interface Puzzle {
   kind: Kind;
   difficulty?: Difficulty;
+  shapes?: ShikakuShape[];
   size: number;
   seed: string;
   initial: number[];
@@ -510,56 +517,8 @@ export function rectangle(a: number, b: number, n: number) {
   for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) cells.push(y * n + x);
   return cells;
 }
-export function shikakuOptions(clues: number[], n: number): number[][][] {
-  return clues.flatMap((area, i) => {
-    if (!area) return [];
-    const rects: number[][] = [];
-    for (let h = 1; h <= n; h++) {
-      if (area % h === 0 && area / h <= n) {
-        const w = area / h, r = i / n | 0, c = i % n;
-        for (let y = Math.max(0, r - h + 1); y <= Math.min(r, n - h); y++) {
-          for (let x = Math.max(0, c - w + 1); x <= Math.min(c, n - w); x++) {
-            const cells = rectangle(y * n + x, (y + h - 1) * n + x + w - 1, n);
-            if (
-              cells.filter((j) => clues[j] > 0).length === 1
-            ) rects.push(cells);
-          }
-        }
-      }
-    }
-    return [rects];
-  });
-}
-export function countShikaku(clues: number[], n: number, limit = 2): number {
-  const options = shikakuOptions(clues, n);
-  let count = 0;
-  const occupied = new Set<number>();
-  const visit = (remaining: number[]) => {
-    if (!remaining.length) {
-      if (occupied.size === n * n) count++;
-      return;
-    }
-    let best = -1, choices: number[][] = [];
-    for (const i of remaining) {
-      const valid = options[i].filter((cells) => cells.every((c) => !occupied.has(c)));
-      if (!valid.length) return;
-      if (best < 0 || valid.length < choices.length) {
-        best = i;
-        choices = valid;
-      }
-    }
-    for (const cells of choices) {
-      cells.forEach((c) => occupied.add(c));
-      visit(remaining.filter((i) => i !== best));
-      cells.forEach((c) => occupied.delete(c));
-      if (count >= limit) return;
-    }
-  };
-  visit(options.map((_, i) => i));
-  return count;
-}
 // Pack rectangles directly: recursive splitting always leaves a full-board seam.
-function staggeredShikakuPartition(n: number, rng: Random): number[][] | null {
+export function staggeredShikakuPartition(n: number, rng: Random): number[][] | null {
   const regions = Array(n * n).fill(0), rects: number[][] = [];
   let budget = 1000;
   const visit = (fillerCells: number, hasNine: boolean): boolean => {
@@ -905,7 +864,8 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   }
   const level = difficulty ?? DAILY_DIFFICULTIES[kind];
   const rng = new Random(key),
-    size = kind === "snap" && level !== "easy" ? 7
+    size = kind === "shikaku" && difficulty ? SHIKAKU_SIZES[difficulty]
+      : kind === "snap" && level !== "easy" ? 7
       : kind === "queens" ? QUEENS_SIZES[level!] : kind === "sudoku" || kind === "killer"
       ? 9
       : kind === "atoms" || kind === "sets"
@@ -930,7 +890,8 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       atoms(p, rng);
       break;
     case "shikaku":
-      generateShikaku(p, rng);
+      if (difficulty && difficulty !== "easy") generateShapeShikaku(p, rng, difficulty);
+      else generateShikaku(p, rng);
       break;
     case "snap":
       snap(p, rng, level!);
@@ -1038,9 +999,8 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
       if (a.some((v) => !Number.isInteger(v) || v <= 0)) return false;
       return [...new Set(a)].every((id) => {
         const cells = a.flatMap((v, i) => v === id ? [i] : []),
-          numbers = cells.filter((i) => p.clues[i] > 0),
           rect = rectangle(Math.min(...cells), Math.max(...cells), n);
-        return numbers.length === 1 && p.clues[numbers[0]] === cells.length &&
+        return !shikakuRectangleError(p, cells) &&
           rect.length === cells.length && rect.every((i) => a[i] === id);
       });
     }

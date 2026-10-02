@@ -36,7 +36,7 @@ Deno.test("Dosun requires vertical support, one of each piece per region, and im
   const regions = [0, 1, 2, 0, 1, 2, 0, 1, 2];
   const valid = [1, 1, 1, 0, 0, 0, 2, 2, 2];
   assert(validDosun(regions, valid, 3));
-  assert(validDosun(regions, [1, 1, 1, 3, 3, 3, 2, 2, 2], 3), "X notes are optional");
+  assert(!validDosun(regions, [1, 1, 1, 3, 3, 3, 2, 2, 2], 3), "X is no longer a state");
   assert(!validDosun(regions, [0, 1, 1, 1, 0, 0, 2, 2, 2], 3), "unsupported balloon");
   assert(!validDosun(regions, [1, 1, 1, 2, 0, 0, 0, 2, 2], 3), "unsupported weight");
   assert(!validDosun(regions, [1, 1, 1, 1, 0, 0, 2, 2, 2], 3), "extra balloon in a region");
@@ -50,6 +50,34 @@ Deno.test("Dosun requires vertical support, one of each piece per region, and im
       p.solution.some((v, i) => v === 2 && p.solution[i + p.size] === 2),
     "generated fixture includes a stack",
   );
+});
+Deno.test("Dosun old X notes become empty without resetting pieces, time or completion", () => {
+  for (const complete of [false, true]) {
+    for (const seed of ["2026-09-24", "practice:dosun-migration"]) {
+      const p = generate("dosun", seed), data = new Map<string, string>();
+      const storage = {
+        getItem: (k: string) => data.get(k) ?? null,
+        setItem: (k: string, v: string) => { data.set(k, v); },
+      };
+      const legacy = p.solution.map((v) => v === 0 ? 3 : v);
+      if (!complete) legacy[legacy.indexOf(1)] = 0;
+      const store = new ProgressStore(storage);
+      store.save(seed, "dosun", {
+        values: legacy, notes: {}, elapsed: 127, completed: complete,
+        ...(complete ? { completedAt: "2026-09-24T12:00:00Z" } : {}),
+      });
+      const resumed = (seed.startsWith("practice:") ? store : new ProgressStore(storage)).load(p);
+      assert(JSON.stringify(resumed.values) === JSON.stringify(legacy.map((v) => v === 3 ? 0 : v)));
+      assert(resumed.elapsed === 127 && resumed.completed === complete);
+      if (complete) assert(resumed.completedAt === "2026-09-24T12:00:00Z");
+      store.save(seed, "dosun", resumed);
+      assert(!store.load(p).values.includes(3), "removed notes stay empty after saving again");
+      const rock = p.regions.indexOf(-1);
+      resumed.values[rock] = 3;
+      store.save(seed, "dosun", resumed);
+      assert(JSON.stringify(store.load(p).values) === JSON.stringify(p.initial), "damaged rocks still reset");
+    }
+  }
 });
 Deno.test("Nurikabe checks connected sea, island clues, no pools, and fully decided cells", () => {
   const clues = [1, 0, 1, 0, 0, 0, 1, 0, 1], values = [2, 1, 2, 1, 1, 1, 2, 1, 2];

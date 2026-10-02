@@ -1,6 +1,7 @@
 import { findSets, setDescription } from "./sets.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import { fiveCellOptions } from "./extra-puzzles.ts";
+import { shikakuClueCells, shikakuOptions, shikakuRectangleError, SHAPE_LABELS } from "./shikaku.ts";
 import { adjacent, canStepNumberPath, direction, isSolved, type Puzzle, rectangle, rotate } from "./puzzles.ts";
 
 /** Smart hints deliberately cannot access a generated answer. Entries are treated as assumptions. */
@@ -541,18 +542,40 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
       break;
     }
     case "shikaku": {
-      for (const i of all.filter((i) => p.clues[i] > 0 && !a[i])) {
-        const choices: number[][] = [];
-        for (const start of all) {
-          for (const end of all) {
-            if (end < start || end % n < start % n) continue;
-            const cells = rectangle(start, end, n);
-            if (
-              cells.length === p.clues[i] && cells.includes(i) &&
-              cells.every((j) => !a[j] && (j === i || !p.clues[j]))
-            ) choices.push(cells);
+      for (const id of new Set(a.filter(Boolean))) {
+        const cells = all.filter((i) => a[i] === id), rect = rectangle(Math.min(...cells), Math.max(...cells), n);
+        const error = shikakuRectangleError(p, cells);
+        if (error || rect.length !== cells.length || rect.some((i) => a[i] !== id)) {
+          return problem(error ?? "This region is not a rectangle. Remove it and draw between opposite corners.", cells);
+        }
+      }
+      const markers = shikakuClueCells(p);
+      const options = shikakuOptions(p.clues, n, p.shapes).map((rects, k) =>
+        a[markers[k]] ? [] : rects.filter((cells) => cells.every((i) => !a[i])));
+      // Reach and shared coverage constrain shape-only clues without guessing a size.
+      let changed = true;
+      while (changed) {
+        changed = false;
+        const restrict = (k: number, keep: (cells: number[]) => boolean) => {
+          const next = options[k].filter(keep);
+          if (next.length !== options[k].length) { options[k] = next; changed = true; }
+        };
+        for (const [k, i] of markers.entries()) {
+          if (a[i] || !options[k].length) continue;
+          const forced = options[k][0].filter((cell) => options[k].every((cells) => cells.includes(cell)));
+          for (let other = 0; other < markers.length; other++) if (other !== k && !a[markers[other]]) {
+            restrict(other, (cells) => !cells.some((cell) => forced.includes(cell)));
           }
         }
+        for (const cell of all.filter((i) => !a[i])) {
+          const reachable = options.flatMap((rects, k) => rects.some((cells) => cells.includes(cell)) ? [k] : []);
+          if (!reachable.length) return problem("No remaining clue can reach this empty square. Check nearby rectangles and their shapes.", [cell]);
+          if (reachable.length === 1) restrict(reachable[0], (cells) => cells.includes(cell));
+        }
+      }
+      for (const [k, i] of markers.entries()) {
+        if (a[i]) continue;
+        const choices = options[k];
         if (!choices.length) {
           return problem(
             "No rectangle fits this clue without overlapping an existing rectangle or another clue.",
@@ -564,8 +587,8 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
           cells.forEach((j) => values[j] = id);
           return {
             title: "A logical next move",
-            text: `Only this rectangle has area ${
-              p.clues[i]
+            text: `Combining the cells each clue can reach leaves only this rectangle fitting ${p.clues[i] ? `the area of ${p.clues[i]} cells` : "this clue without a fixed area"}${
+              p.shapes?.[i] ? ` and its ${SHAPE_LABELS[p.shapes[i] as keyof typeof SHAPE_LABELS]} restriction` : ""
             }, contains this clue alone, and avoids the rectangles already placed.`,
             cells,
             values,
@@ -703,7 +726,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
           });
           if (!choices.length) {
             return problem(
-              "This region has no supported place for its missing piece. Check the pieces and X marks.",
+              "This region has no supported place for its missing piece. Check the placed pieces.",
               cells,
             );
           }
@@ -838,7 +861,6 @@ export function revealHint(p: Puzzle, a: number[]): Hint {
     if (p.kind === "akari" && v === 0 && a[i] === 2) return false;
     if (p.kind === "queens" && v === 0 && a[i] === 2) return false;
     if (p.kind === "mosaic" && v === 2 && a[i] === 0) return false;
-    if (p.kind === "dosun" && v === 0 && a[i] === 3) return false;
     return v !== a[i];
   };
   const i = p.solution.findIndex(differs);

@@ -47,7 +47,7 @@ export function validDosun(regions: number[], values: number[], n: number) {
       if (v !== -1) return false;
       continue;
     }
-    if (![0, 1, 2, 3].includes(v)) return false;
+    if (![0, 1, 2].includes(v)) return false;
     const count = counts.get(region) || [0, 0];
     counts.set(region, count);
     if (v === 1) {

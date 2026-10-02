@@ -25,6 +25,12 @@ export function archivedPuzzle(kind: Kind, date: string, difficulty?: Difficulty
   const day = archivedDay(date);
   if (!day) return;
   const puzzle = day.puzzles[`${kind}/${difficulty ?? "classic"}`];
+  // These variants did not exist when the older snapshots were published.
+  // Easy is the original numbered board; new shape variants can be played as alternatives.
+  if (!puzzle && kind === "shikaku" && difficulty && !day.puzzles["shikaku/easy"]) {
+    if (difficulty === "easy") return { ...structuredClone(day.puzzles["shikaku/classic"]), difficulty };
+    return;
+  }
   if (!puzzle) throw new Error(`Missing archived puzzle: ${date}/${kind}/${difficulty}`);
   // Runtime edits must never modify the source snapshot, including after cache eviction.
   return structuredClone(puzzle);

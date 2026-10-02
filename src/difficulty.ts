@@ -12,7 +12,7 @@ export const DIFFICULTY_LABELS: Record<DifficultyChoice, string> = {
   classic: "Original",
 };
 export const DAILY_DIFFICULTIES: Partial<Record<Kind, Difficulty>> = {
-  queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard",
+  queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard",
 };
 export function supportsDifficulty(kind: Kind) {
   return DAILY_DIFFICULTIES[kind] !== undefined;
@@ -22,11 +22,17 @@ export function isDifficulty(value: unknown): value is Difficulty {
 }
 export function dailyDifficulty(kind: Kind, date: string): Difficulty | undefined {
   if (!supportsDifficulty(kind)) return;
+  if (kind === "shikaku" && date >= "2026-10-02") return DAILY_DIFFICULTIES.shikaku;
   const day = archivedDay(date);
   return day ? day.defaults[kind] ?? undefined : DAILY_DIFFICULTIES[kind];
 }
 export function difficultyDescription(kind: Kind, level: DifficultyChoice): string {
   if (level === "classic") return "The original daily board, with your existing progress.";
+  if (kind === "shikaku") return {
+    easy: "6 × 6 · Classic numbered rectangles.",
+    medium: "7 × 7 · Shape clues, with some sizes left to discover.",
+    hard: "8 × 8 · Work out most sizes from shapes and neighboring regions.",
+  }[level];
   if (kind === "queens") return {
     easy: "6 × 6 · Find the only available square.",
     medium: "7 × 7 · Combine row, column, and region exclusions.",

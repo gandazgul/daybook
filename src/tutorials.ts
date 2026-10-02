@@ -3,6 +3,7 @@ import { akariSight, AKARI_WHITE } from "./akari.ts";
 import finishedBoards from "./tutorial-boards.json" with { type: "json" };
 import type { Kind, Puzzle } from "./puzzles.ts";
 import type { StorageLike } from "./storage.ts";
+import { shikakuClueCells } from "./shikaku.ts";
 
 export const TUTORIAL_KEY = "daybook:tutorials:v1:";
 
@@ -41,7 +42,7 @@ export interface TutorialStep {
 // Tutorials can inspect visible clues and geometry, never the solution or the player's answers.
 type VisiblePuzzle = Pick<
   Puzzle,
-  "kind" | "size" | "initial" | "clues" | "regions" | "cages" | "links" | "edges"
+  "kind" | "size" | "initial" | "clues" | "regions" | "cages" | "links" | "edges" | "shapes"
 >;
 
 const finishedGoals: Record<Exclude<Kind, "nurikabe">, string> = {
@@ -109,10 +110,17 @@ export function tutorialSteps(p: VisiblePuzzle): TutorialStep[] {
     return steps;
   }
   // These fixed examples are unrelated to the current puzzle and never reveal its answer.
-  const boardExample = finishedBoards[p.kind] as VisiblePuzzle & { values: number[] };
+  const shapeExample: VisiblePuzzle & { values: number[] } = {
+    kind: "shikaku", size: 4, initial: Array(16).fill(0), regions: [], cages: [], links: [], edges: [],
+    clues: [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0],
+    shapes: ["square", "", "any", "tall", "", "", "", "", "wide", "", "square", "", "any", "", "", ""],
+    values: [1, 1, 2, 3, 1, 1, 2, 3, 4, 4, 5, 5, 6, 6, 5, 5],
+  };
+  const shaped = p.kind === "shikaku" && !!p.shapes;
+  const boardExample = shaped ? shapeExample : finishedBoards[p.kind] as VisiblePuzzle & { values: number[] };
   return [{
     title: "A finished puzzle",
-    text: finishedGoals[p.kind] +
+    text: (shaped ? "Every region is a rectangle with one clue. Squares have equal sides; wide and tall rectangles follow their symbols. Numbered regions match their areas, and shape-only regions fit around their neighbors." : finishedGoals[p.kind]) +
       " This is a separate example. Next explains the rules on your board.",
     finished: true,
     boardExample,
@@ -311,25 +319,30 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
           row(0),
         ),
       ];
-    case "shikaku":
+    case "shikaku": {
+      const markers = shikakuClueCells(p);
+      const shapeOnly = markers.filter((i) => !p.clues[i]);
       return [
         step(
           "Cover the grid",
           "Divide the whole grid into rectangles. Leave no gaps and no overlapping rectangles.",
         ),
-        step("One clue per rectangle", "Every rectangle must contain exactly one numbered clue.", [
-          clue,
-        ]),
+        step("One clue per rectangle", "Every rectangle must contain exactly one clue. A clue can have a number, a shape, or both.", markers),
         step(
           "The clue is its area",
           "A rectangle must contain exactly as many squares as its clue says. Count every square, including the clue’s square.",
           [clue],
         ),
+        ...(p.shapes ? [
+          step("Follow the shape", "A square has equal width and height. Wide means wider than tall; tall means taller than wide. Overlapping squares allow any rectangle, including a square.", markers),
+          step("Discover missing sizes", "A clue without a number has no fixed area. Work out its reach from the board edges and neighboring rectangles. It still needs one clue and must match its shape.", shapeOnly.length ? shapeOnly : markers),
+        ] : []),
         step(
           "Draw a rectangle",
           "Drag between opposite corners, or tap one corner and then the other. Tap a placed rectangle to remove it.",
         ),
       ];
+    }
     case "snap": {
       const start = first((i) => p.clues[i] === 1);
       return [
@@ -492,12 +505,12 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
         ),
         step(
           "Place the pieces",
-          "Tap a square to cycle white balloon → black weight → X → clear.",
+          "Tap a square to cycle white balloon → black weight → empty.",
           [first((i) => p.regions[i] >= 0)],
         ),
         step(
-          "Xs are optional",
-          "Xs are notes for unused squares. Unused squares may stay blank; only the balloons and weights are required.",
+          "Leave unused squares blank",
+          "Only the balloons and weights are required. Leave all other squares empty.",
         ),
       ];
     }

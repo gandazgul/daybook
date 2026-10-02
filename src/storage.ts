@@ -62,6 +62,10 @@ export class ProgressStore {
   }
   load(puzzle: Puzzle): Progress {
     const saved = this.get(puzzle.seed, puzzle.kind, puzzle.difficulty);
+    // Retire old Dosun X notes without losing placed pieces, time, or completion.
+    if (saved && puzzle.kind === "dosun") {
+      saved.values = saved.values.map((value) => value === 3 ? 0 : value);
+    }
     const good = saved && this.validEntries(puzzle, saved.values) &&
       (puzzle.kind === "snap"
         ? saved.values.length <= puzzle.size ** 2
@@ -93,7 +97,7 @@ export class ProgressStore {
       case "mosaic":
         return a.every((v) => v >= 0 && v <= 2);
       case "dosun":
-        return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 3);
+        return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 2);
       case "nurikabe":
         return a.every((v, i) => v >= 0 && v <= 2 && (!p.clues[i] || v === 2));
       case "akari":

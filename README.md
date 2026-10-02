@@ -35,7 +35,7 @@ Phaser renders at device pixel density (up to 3×) for clear text and lines on p
 | Pipes           | Rotate pipes to connect every tile and endpoint to the water source without leaks                                        | 5 × 5 |
 | Atoms           | Match each atom's required bonds using one or two lines between adjacent atoms; connect the whole network                | 4 × 4 |
 | Regional Queens | Place one queen per row, column, and region; queens cannot touch, even diagonally                                        | 6 × 6–8 × 8 |
-| Shikaku         | Cover the grid with rectangles, each containing one clue equal to its area                                               | 6 × 6 |
+| Shikaku         | Cover the grid with one clue per rectangle; match optional areas and square, wide, or tall shape clues                    | 6 × 6–8 × 8 |
 | Number Path     | Visit numbered dots in order along one path that fills every square exactly once                                         | 5 × 5 |
 | Balance         | Place three of each shape per row and column, with no three consecutive identical shapes; satisfy = and × clues          | 6 × 6 |
 | Sets            | Find exactly three different sets: each feature must be all the same or all different across three cards                  | 8 cards |
@@ -203,7 +203,7 @@ a complete logical solver for every position.
   current work is not interrupted.
 
 Published boards are fixed JSON snapshots in `src/archive/`, covering every date from
-**September 1–25, 2026**, all fourteen kinds, Original boards, and every supported difficulty.
+**September 1–October 3, 2026**, all fourteen kinds, Original boards, and every difficulty supported at capture time.
 The calendar starts in September 2026. Archived boards and their daily default difficulties load
 from this bundled data, including offline; later dates and practice use only the current generators.
 Old generator implementations and date-based quality switches have been removed. The existing
@@ -215,8 +215,9 @@ tomorrow when time zones or a rollout crossing midnight could expose it. This ap
 snapshots with the source Git revision, never overwrites existing ones, and refreshes the import
 index. Then edit the current generator, run the checks, and ship the snapshots with the change.
 The command refuses to export new days after source edits. No daily server job or growing collection
-of historical algorithms is needed; only the small puzzle data accumulates. Missing archived boards
-fail to load rather than silently regenerate against a different algorithm.
+of historical algorithms is needed; only the small puzzle data accumulates. Missing published archived boards
+fail to load rather than silently regenerate against a different algorithm. Newly introduced
+Shikaku variants are available as alternatives on older dates; Easy aliases the frozen Original board.
 
 Clearing browser data also clears your puzzle history. If storage is blocked, the collection shows
 that progress is temporary.
@@ -226,11 +227,12 @@ on desktop or below it on smaller screens.
 
 ## Difficulty
 
-Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
+Shikaku, Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
 and practice. From **September 19, 2026**, the daily defaults are:
 
 | Game | Daily default | Easy | Medium | Hard |
 | --- | --- | --- | --- | --- |
+| Shikaku (from October 2) | Hard | 6 × 6, classic numbered rectangles | 7 × 7, mixed number/shape clues | 8 × 8, mostly shape-only clues |
 | Number Path (from September 25) | Hard | 5 × 5, 6 dots | 7 × 7, 12 dots | 7 × 7, 12 dots and 10 walls |
 | Regional Queens | Hard | 6 × 6, single available squares | 7 × 7, combined unit exclusions | 8 × 8, candidate contradiction trials |
 | Balance | Hard | Direct shape counts, triples, and = / × clues | Compatible row and column patterns | Candidate contradiction trials |
@@ -240,6 +242,29 @@ and practice. From **September 19, 2026**, the daily defaults are:
 Number Path levels increase the board size and introduce walls that the path cannot cross. Walls
 leave a complete solution available; hints and saved paths respect them. Original daily boards
 through September 24, 2026 remain unchanged. Its levels describe board features, not solver ratings.
+
+Shikaku keeps its current numbered generator as Easy. Medium and Hard use square (equal sides),
+wide (strictly wider than tall), tall (strictly taller than wide), and unrestricted clues. The
+unrestricted symbol is two overlapping squares and permits any rectangle, including a square;
+it never permits an irregular shape. A clue may have a number, a shape, or both. Numbered clues
+fix the area; shape-only clues leave the area to be deduced from neighboring regions and coverage.
+Every rectangle contains exactly one clue, and every cell must be covered exactly once.
+
+Medium withholds at least **30%** of areas; Hard withholds at least **60%**, on a larger board.
+These levels describe board size and available information, rather than a claimed logical technique
+rating. Each starts from one of **32 verified templates** per level, rotates/reflects (swapping tall
+and wide when needed), and tries at most **12 clue-position edits** that preserve uniqueness and
+at least half the clues having multiple initial rectangle choices. Bounded exact-cover checks
+explicitly reject search-budget exhaustion. The existing staggered-partition preferences remain:
+areas 2–9, at most one nine-cell block, at least 75% block coverage, small strip fillers, no full-board
+seams or four-way corners. The authoring tool is `scripts/build-shikaku-bank.ts`.
+
+Shape symbols and a legend appear on the board. Illegal drawings explain the mismatched area or
+orientation. Smart hints combine clue reach and shared coverage without reading the answer, and
+reveal hints still place one whole rectangle. Tutorials show a separate finished shape-clue example.
+Original archived Shikaku boards remain playable; Easy uses those same number-only boards as
+alternatives on archived dates. Medium/Hard alternatives are newly introduced rather than existing
+published boards. From October 2 the daily default is Hard; an existing Original save still resumes.
 
 Balance stays 6 × 6; both Sudokus stay 9 × 9. Their ratings, and those for Queens, describe the logical techniques required,
 not measured human solving times. Rating solvers use visible constraints only, never the stored
@@ -277,7 +302,7 @@ dates and pre-September-19 dates for the other three games retain their **Origin
 rated levels available as alternatives. Existing Original saves also resume after an update, even
 on a newer date. Original boards are not retroactively labeled as a rated tier.
 
-Practice asks for a level before opening these four games, remembers it separately for each game,
+Practice asks for a level before opening these six games, remembers it separately for each game,
 and keeps it for **Another of these**. Practice progress remains session-only and separate from the
 daily calendar. The difficulty chooser pauses the timer; auto-update snapshots include the current
 level. Smart hints explain their supported deductions and can report that no deduction was found
@@ -299,6 +324,8 @@ reduced-motion setting, this becomes a stationary highlight.
   that note to every selected empty cell, or removes it when they all already contain it. Existing
   answers and fixed clues stay intact during bulk note entry. Each batch is one undo step. Tap a
   cell or use an arrow to return to a single selection; turning notes off also selects one cell.
+  Automatically enabled notes return to number entry when the selection drops to one or no cells.
+  Notes that were already enabled stay on.
   Placing an answer removes notes that conflict with written numbers in the same row, column, box,
   or Killer cage. Undo restores the entry and its removed notes together. Double-tap or double-click
   a cell with exactly one note to fill its number, even with notes on. Digits with nine placed
@@ -319,10 +346,11 @@ reduced-motion setting, this becomes a stationary highlight.
   shading once their whole neighborhood is decided. Untouched areas stay neutral; edges count only
   on-board cells.
 - **Shikaku:** drag between opposite corners, or tap two corners. Tap a placed rectangle to remove
-  it. Invalid rectangles are rejected with a short message.
+  it. Releasing outside the grid or canvas finishes at the last cell reached on the grid.
+  Invalid rectangles are rejected with a short message.
 - **Number Path:** drag or tap adjacent cells. Tap an earlier path cell to backtrack.
-- **Dosun-Fuwari:** tap to cycle balloon → weight → X note → clear. Rocks are fixed; X notes are
-  optional and unused squares can stay blank. Balloons are white balloon shapes; weights are black
+- **Dosun-Fuwari:** tap to cycle balloon → weight → empty. Rocks are fixed; unused squares stay
+  blank. Balloons are white balloon shapes; weights are black
   with a wider base, in both themes. Arrows and Space work too.
 - **Nurikabe:** tap to cycle sea → island dot → clear. Numbered cells are fixed land. Mark all other
   cells to finish; arrows and Space also work.
@@ -415,7 +443,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **89 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **103 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,

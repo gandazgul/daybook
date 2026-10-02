@@ -1,6 +1,7 @@
 import { ARCHIVE_START } from "./puzzle-archive.ts";
 import { AccessibleMenu, type MenuControl } from "./accessible-menu.ts";
 import { ScrollMomentum } from "./scroll.ts";
+import { shikakuRectangleError, type ShikakuShape } from "./shikaku.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import {
   dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, difficultyDescription,
@@ -107,6 +108,7 @@ class Daybook extends Phaser.Scene {
   selectedCells = new Set<number>();
   reviewSet = -1;
   notes = false;
+  temporaryNotes = false;
   history: { values: number[]; notes: Record<number, number[]> }[] = [];
   redoHistory: { values: number[]; notes: Record<number, number[]> }[] = [];
   board = { x: 0, y: 0, cell: 0, n: 0 };
@@ -289,8 +291,23 @@ class Daybook extends Phaser.Scene {
         }
       }
     });
+    const finishShikakuGesture = (p: Phaser.Input.Pointer, releasedCell: number) => {
+      if (this.puzzle?.kind !== "shikaku" || this.pointerStart < 0) return;
+      // Off-board releases commit the preview at the last cell reached, but an
+      // off-board press/release with no rectangle must not turn into a tap.
+      const end = releasedCell >= 0 ? releasedCell :
+        this.pointerLast !== this.pointerStart ? this.pointerLast : -1;
+      if (end < 0) return;
+      if (end !== this.pointerStart) this.placeRectangle(this.pointerStart, end);
+      else this.actCell(end, p);
+      this.cellFeedback(end);
+    };
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       if (this.boardPointerId >= 0 && p.id !== this.boardPointerId) return;
+      if (p.event.type === "touchcancel") {
+        cancelGesture();
+        return;
+      }
       this.scrollMomentum.release(performance.now());
       if (this.page === "game" && !this.modal && !this.progress?.completed) {
         const i = this.cellAt(p);
@@ -313,11 +330,7 @@ class Daybook extends Phaser.Scene {
         }
         if (this.puzzle?.kind === "nurikabe" && this.pointerStart >= 0 && i >= 0) this.paintNurikabe(i);
         if (this.puzzle?.kind === "queens") this.queensInput.end(i, performance.now());
-        if (this.puzzle?.kind === "shikaku" && i >= 0 && this.pointerStart >= 0) {
-          if (i !== this.pointerStart) this.placeRectangle(this.pointerStart, i);
-          else this.actCell(i, p);
-          this.touchFeedback((p.x / RENDER_SCALE), (p.y / RENDER_SCALE), Math.min(24, this.board.cell * .32));
-        }
+        finishShikakuGesture(p, i);
       }
       this.pointerStart = this.boardPointerId = -1;
     });
@@ -327,7 +340,13 @@ class Daybook extends Phaser.Scene {
       this.queensInput.reset();
       this.sudokuTap = undefined;
     };
-    this.input.on("pointerupoutside", cancelGesture);
+    this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => {
+      if (this.boardPointerId >= 0 && p.id !== this.boardPointerId) return;
+      if (p.event.type !== "touchcancel" && this.page === "game" && !this.modal && !this.progress?.completed) {
+        finishShikakuGesture(p, -1);
+      }
+      cancelGesture();
+    });
     this.game.canvas.addEventListener("touchcancel", cancelGesture);
     globalThis.addEventListener("blur", cancelGesture);
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => this.key(e));
@@ -1246,6 +1265,7 @@ class Daybook extends Phaser.Scene {
     this.history = [];
     this.redoHistory = [];
     this.notes = false;
+    this.temporaryNotes = false;
     this.scrollY = 0;
     if (!tutorials.hasSeen(kind)) {
       this.startTutorial();
@@ -1336,6 +1356,7 @@ class Daybook extends Phaser.Scene {
     this.selected = -1;
     this.selectedCells.clear();
     this.scrollY = 0;
+    this.updateSudokuNotes();
     this.changed();
   }
   drawTutorial() {
@@ -1488,12 +1509,13 @@ class Daybook extends Phaser.Scene {
   puzzleLayout() {
     const compact = this.W < 760 || this.H < 480, landscape = this.W > this.H, short = this.H < 720;
     const notePuzzle = this.puzzle!.kind === "sudoku" || this.puzzle!.kind === "killer";
+    const shapeLegend = this.puzzle!.kind === "shikaku" && this.puzzle!.shapes ? 30 : 0;
     const m = compact ? this.mobile ? 12 : this.margin : Math.max(24, (this.W - 1120) / 2);
     const w = this.W - m * 2, headerTop = compact || short ? 8 : 19;
     const identityBy = compact ? landscape ? 76 : this.H < 700 ? 132 : 164 : short ? 166 : 196;
     const by = identityBy + (compact && !landscape && supportsDifficulty(this.puzzle!.kind) ? 44 : 0);
     const gap = Phaser.Math.Clamp(w * .035, 20, 40), buttonSize = short ? 44 : 52;
-    const footer = compact ? this.progress!.completed ? 132 : notePuzzle ? 174 : 124
+    const footer = compact ? (this.progress!.completed ? 132 : notePuzzle ? 174 : 124) + shapeLegend
       : (notePuzzle ? 54 : 0) + buttonSize * 2 + 46 + (this.notice ? 48 : 0);
     const available = compact ? landscape
       ? Math.min(this.H - by - 12, this.W * .48 - 20)
@@ -1571,7 +1593,8 @@ class Daybook extends Phaser.Scene {
     this.board = { x: bx, y: by, cell: size / p.size, n: p.size };
     this.drawPuzzleIdentity(layout);
     this.drawBoard();
-    const controlsY = landscape ? titleY + 66 + (supportsDifficulty(p.kind) ? 44 : 0) : by + size + 10;
+    const legendY = landscape ? titleY + 66 + (supportsDifficulty(p.kind) ? 44 : 0) : by + size + 10;
+    const controlsY = legendY + (p.kind === "shikaku" && p.shapes ? this.drawShikakuLegend(ux, legendY, uw) : 0);
     if (progress.completed) {
       this.text(ux, controlsY, `${META[p.kind].name} completed`, 18, c.accent);
       const remaining = kindsForDate(p.seed).find((kind) => !store.dailyProgress(p.seed, kind)?.completed);
@@ -1634,7 +1657,8 @@ class Daybook extends Phaser.Scene {
       this.contentHeight = Math.max(this.H, sidebarBottom + 24, bottom + buttonSize + 38);
     } else {
       this.text(sx, by, "HOW TO PLAY", 11, c.accent).setLetterSpacing(1.5);
-      sidebarBottom = by + 28 + this.drawRules(sx, by + 28, sw, META[p.kind].rules, 0, short ? 13 : 14, short ? 7 : 10);
+      const rulesY = by + 28 + (p.kind === "shikaku" && p.shapes ? this.drawShikakuLegend(sx, by + 28, sw) : 0);
+      sidebarBottom = rulesY + this.drawRules(sx, rulesY, sw, META[p.kind].rules, 0, short ? 13 : 14, short ? 7 : 10);
       if (notePuzzle) this.keypad(bx, bottom + 14, size, 42);
       const controlsY = bottom + 14 + (notePuzzle ? 54 : 0);
       const actions = [
@@ -1906,7 +1930,6 @@ class Daybook extends Phaser.Scene {
             .lineBetween(xx + s * .2, yy + s * .8, xx + s * .8, yy + s * .2);
         } else {
           if (a[i] === 1 || a[i] === 2) this.dosunPiece(xx + s / 2, yy + s / 2, s, a[i]);
-          if (a[i] === 3) this.text(xx + s / 2, yy + s / 2, "×", s * .4, c.muted).setOrigin(.5);
           this.text(
             xx + 4,
             yy + 3,
@@ -1977,8 +2000,8 @@ class Daybook extends Phaser.Scene {
           Math.max(8, s * .13),
           blend(fill, c.ink, .45),
         );
-      } else if (p.kind === "shikaku" && p.clues[i]) {
-        this.text(xx + s / 2, yy + s / 2, String(p.clues[i]), s * .37, c.ink).setOrigin(.5);
+      } else if (p.kind === "shikaku" && (p.clues[i] || p.shapes?.[i])) {
+        this.drawShikakuClue(xx + s / 2, yy + s / 2, s, p.clues[i], p.shapes?.[i]);
       } else if (p.kind === "mambo") {
         const fixed = p.initial[i] > 0,
           color = a[i] === 1 ? this.tint("shikaku") : this.tint("pipes");
@@ -2322,6 +2345,7 @@ class Daybook extends Phaser.Scene {
       this.modal = null;
       this.selected = -1;
       this.selectedCells.clear();
+      this.updateSudokuNotes();
       this.announce(
         `${META[this.puzzle!.kind].name} complete. Time ${formatTime(this.progress!.elapsed)}.`,
       );
@@ -2361,6 +2385,7 @@ class Daybook extends Phaser.Scene {
     }
     if (p.kind === "sudoku" || p.kind === "killer") {
       this.selectedCells = new Set([i]);
+      this.updateSudokuNotes();
       this.draw();
       this.announce(
         `Row ${1 + (i / 9 | 0)}, column ${i % 9 + 1}, ${a[i] || "empty"}${
@@ -2441,18 +2466,20 @@ class Daybook extends Phaser.Scene {
       return;
     }
     this.snapshot();
-    a[i] = p.kind === "pipes" ? rotate(a[i]) : (a[i] + 1) % (p.kind === "dosun" ? 4 : 3);
+    a[i] = p.kind === "pipes" ? rotate(a[i]) : (a[i] + 1) % 3;
     this.changed();
   }
   placeRectangle(a: number, b: number) {
     const p = this.puzzle!,
       values = this.progress!.values,
-      cells = rectangle(a, b, p.size),
-      clues = cells.filter((i) => p.clues[i] > 0);
+      cells = rectangle(a, b, p.size);
     this.rectStart = -1;
     this.selected = -1;
-    if (cells.some((i) => values[i]) || clues.length !== 1 || p.clues[clues[0]] !== cells.length) {
-      this.notice = "Choose an empty rectangle with one clue matching its area.";
+    const error = cells.some((i) => values[i]) ? "This overlaps a placed rectangle. Remove it first." :
+      shikakuRectangleError(p, cells);
+    if (error) {
+      this.notice = error;
+      this.announce(error);
       this.draw();
       return;
     }
@@ -2461,18 +2488,59 @@ class Daybook extends Phaser.Scene {
     cells.forEach((i) => values[i] = id);
     this.changed();
   }
+  drawShikakuClue(x: number, y: number, cell: number, area: number, shape?: ShikakuShape) {
+    const c = this.C;
+    if (!shape) {
+      this.text(x, y, String(area), cell * .37, c.ink).setOrigin(.5);
+      return;
+    }
+    const w = cell * (shape === "wide" ? .72 : shape === "tall" ? .44 : .58);
+    const h = cell * (shape === "tall" ? .72 : shape === "wide" ? .44 : .58);
+    const g = this.add.graphics().setName(`shikaku-clue:${shape}:${area}`);
+    const stroke = Math.max(1.2, cell * .025), radius = cell * .06;
+    g.lineStyle(stroke, c.ink).fillStyle(c.panel);
+    if (shape === "any") {
+      const offset = cell * .055;
+      g.strokeRoundedRect(x - w / 2 - offset, y - h / 2 - offset, w, h, radius);
+      g.fillRoundedRect(x - w / 2 + offset, y - h / 2 + offset, w, h, radius);
+      g.strokeRoundedRect(x - w / 2 + offset, y - h / 2 + offset, w, h, radius);
+    } else {
+      g.fillRoundedRect(x - w / 2, y - h / 2, w, h, radius);
+      g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, radius);
+    }
+    if (area) this.text(x, y, String(area), cell * .32, c.ink).setOrigin(.5);
+  }
+  drawShikakuLegend(x: number, y: number, width: number) {
+    const choices = [["square", "Square"], ["wide", "Wide"], ["tall", "Tall"], ["any", "Any"]] as const;
+    choices.forEach(([shape, label], i) => {
+      const xx = x + i * width / 4;
+      this.drawShikakuClue(xx + 10, y + 11, 22, 0, shape);
+      this.text(xx + 24, y + 11, label, 12, this.C.muted).setOrigin(0, .5);
+    });
+    return 30;
+  }
   extendSudokuSelection(i: number) {
     const added = gridLine(this.pointerLast, i, this.puzzle!.size)
       .filter((cell) => !this.selectedCells.has(cell));
     added.forEach((cell) => this.selectedCells.add(cell));
     this.pointerLast = this.selected = i;
-    if (this.selectedCells.size > 1) this.notes = true;
+    this.updateSudokuNotes();
     this.draw();
     added.forEach((cell) => this.cellFeedback(cell));
     this.announce(`${this.selectedCells.size} squares selected. Notes on.`);
   }
+  updateSudokuNotes() {
+    if (this.puzzle?.kind !== "sudoku" && this.puzzle?.kind !== "killer") return;
+    if (this.selectedCells.size > 1 && !this.notes) {
+      this.notes = this.temporaryNotes = true;
+    } else if (this.selectedCells.size <= 1 && this.temporaryNotes) {
+      this.notes = this.temporaryNotes = false;
+    }
+  }
   toggleNotes() {
     this.notes = !this.notes;
+    // An explicit toggle replaces the mode borrowed by a multi-cell selection.
+    this.temporaryNotes = false;
     if (!this.notes) {
       this.selectedCells = new Set(this.selected >= 0 ? [this.selected] : []);
     }
@@ -2642,6 +2710,7 @@ class Daybook extends Phaser.Scene {
       }
       this.selected = this.selected < 0 ? 0 : adjacent(old, n).includes(target) ? target : old;
       this.selectedCells = new Set([this.selected]);
+      this.updateSudokuNotes();
       this.draw();
       this.announce(`Row ${1 + (this.selected / n | 0)}, column ${1 + this.selected % n}`);
       return;
@@ -2942,6 +3011,7 @@ class Daybook extends Phaser.Scene {
         this.progress!.values = [...this.puzzle!.initial];
         this.progress!.notes = {};
         this.selectedCells.clear();
+        this.updateSudokuNotes();
         this.reviewSet = -1;
         this.progress!.completed = false;
         delete this.progress!.completedAt;
