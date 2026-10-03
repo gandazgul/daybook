@@ -2,6 +2,7 @@ import { countShikaku, shikakuOptions, shikakuRectangleError, type ShikakuShape 
 export { countShikaku, shikakuOptions } from "./shikaku.ts";
 import { SHIKAKU_SIZES } from "./shikaku.ts";
 import { generateShapeShikaku } from "./shikaku-difficulty.ts";
+import { generateLargerNurikabe, NURIKABE_SIZES } from "./nurikabe-difficulty.ts";
 import { archivedPuzzle } from "./puzzle-archive.ts";
 import { findSets, generateSets } from "./sets.ts";
 import { generateAkari, validAkari } from "./akari.ts";
@@ -865,6 +866,7 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   const level = difficulty ?? DAILY_DIFFICULTIES[kind];
   const rng = new Random(key),
     size = kind === "shikaku" && difficulty ? SHIKAKU_SIZES[difficulty]
+      : kind === "nurikabe" && difficulty ? NURIKABE_SIZES[difficulty]
       : kind === "snap" && level !== "easy" ? 7
       : kind === "queens" ? QUEENS_SIZES[level!] : kind === "sudoku" || kind === "killer"
       ? 9
@@ -909,7 +911,8 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       generateDosun(p, rng);
       break;
     case "nurikabe":
-      generateNurikabe(p, rng);
+      if (difficulty && difficulty !== "easy") generateLargerNurikabe(p, rng, difficulty);
+      else generateNurikabe(p, rng);
       break;
     case "fivecells":
       generateFiveCells(p, rng);

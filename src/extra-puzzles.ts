@@ -268,12 +268,35 @@ export function validNurikabe(clues: number[], values: number[], n: number) {
     return numbers.length === 1 && clues[numbers[0]] === cells.length;
   });
 }
-export function solveNurikabe(clues: number[], n: number, limit = 2) {
+/** Grow only islands containing their clue; avoids enumerating every shape on a large board. */
+export function nurikabeOptions(clues: number[], n: number): Shape[][] {
   const numbered = clues.flatMap((v, i) => v > 0 ? [i] : []);
-  const clueMask = numbered.reduce((m, i) => m | bit(i), 0n);
-  const options = numbered.map((i) =>
-    shapes(n, clues[i]).filter((s) => (s.mask & clueMask) === bit(i))
-  );
+  return numbered.map((root) => {
+    const forbidden = numbered.filter((i) => i !== root).reduce(
+      (mask, i) => neighbors(i, n).reduce((m, j) => m | bit(j), mask | bit(i)), 0n,
+    );
+    let layer = new Map<bigint, number[]>([[bit(root), [root]]]);
+    for (let size = 1; size < clues[root]; size++) {
+      const next = new Map<bigint, number[]>();
+      for (const [mask, cells] of layer) {
+        for (const i of cells) {
+          for (const j of neighbors(i, n)) {
+            const cell = bit(j);
+            if (!(cell & (mask | forbidden))) next.set(mask | cell, [...cells, j]);
+          }
+        }
+      }
+      layer = next;
+    }
+    return [...layer].map(([mask, cells]) => ({
+      mask, cells,
+      touching: cells.reduce((m, i) => neighbors(i, n).reduce((m, j) => m | bit(j), m), mask),
+    }));
+  });
+}
+export function solveNurikabe(clues: number[], n: number, limit = 2, budget = 40000) {
+  const numbered = clues.flatMap((v, i) => v > 0 ? [i] : []);
+  const options = nurikabeOptions(clues, n);
   const quads: bigint[] = [];
   for (let r = 0; r < n - 1; r++) {
     for (let c = 0; c < n - 1; c++) {
@@ -281,11 +304,11 @@ export function solveNurikabe(clues: number[], n: number, limit = 2) {
       quads.push(bit(i) | bit(i + 1) | bit(i + n) | bit(i + n + 1));
     }
   }
-  let count = 0, solution: number[] = [], nodes = 0;
+  let count = 0, solution: number[] = [], nodes = 0, exhausted = false;
   function visit(remaining: number[], used: bigint, touching: bigint) {
-    if (count >= limit) return;
-    if (++nodes > 40000) {
-      count = limit;
+    if (count >= limit || exhausted) return;
+    if (++nodes > budget) {
+      exhausted = true;
       return;
     }
     if (!remaining.length) {
@@ -307,13 +330,25 @@ export function solveNurikabe(clues: number[], n: number, limit = 2) {
       }
     }
     if (quads.some((q) => !(q & possibleWhite))) return;
+    // Chosen land must leave all forced water connectable through remaining cells.
+    const forcedWater = Array.from({ length: n * n }, (_, i) => i)
+      .filter((i) => !(possibleWhite & bit(i)));
+    if (forcedWater.length) {
+      const seen = new Set([forcedWater[0]]), queue = [forcedWater[0]];
+      for (let k = 0; k < queue.length; k++) {
+        for (const j of neighbors(queue[k], n)) {
+          if (!(used & bit(j)) && !seen.has(j)) { seen.add(j); queue.push(j); }
+        }
+      }
+      if (forcedWater.some((i) => !seen.has(i))) return;
+    }
     for (const s of choices) {
       visit(remaining.filter((i) => i !== best), used | s.mask, touching | s.touching);
-      if (count >= limit) return;
+      if (count >= limit || exhausted) return;
     }
   }
   visit(numbered.map((_, i) => i), 0n, 0n);
-  return { count, solution };
+  return { count, solution, exhausted, nodes };
 }
 export function generateNurikabe(p: Puzzle, rng: Random) {
   const n = p.size;
@@ -339,7 +374,8 @@ export function generateNurikabe(p: Puzzle, rng: Random) {
       if (islands.filter((island) => island.length === 1).length > 2) continue;
       const clues = Array(n * n).fill(0);
       islands.forEach((cells) => clues[rng.pick(cells)] = cells.length);
-      if (solveNurikabe(clues, n).count !== 1) continue;
+      const result = solveNurikabe(clues, n);
+      if (result.count !== 1 || result.exhausted) continue;
       p.clues = clues;
       p.solution = values;
       p.initial = clues.map((v) => v > 0 ? 2 : 0);

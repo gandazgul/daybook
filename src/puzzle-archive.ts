@@ -26,9 +26,9 @@ export function archivedPuzzle(kind: Kind, date: string, difficulty?: Difficulty
   if (!day) return;
   const puzzle = day.puzzles[`${kind}/${difficulty ?? "classic"}`];
   // These variants did not exist when the older snapshots were published.
-  // Easy is the original numbered board; new shape variants can be played as alternatives.
-  if (!puzzle && kind === "shikaku" && difficulty && !day.puzzles["shikaku/easy"]) {
-    if (difficulty === "easy") return { ...structuredClone(day.puzzles["shikaku/classic"]), difficulty };
+  // Easy is the original board; new variants can be played as alternatives.
+  if (!puzzle && (kind === "shikaku" || kind === "nurikabe") && difficulty && !day.puzzles[`${kind}/easy`]) {
+    if (difficulty === "easy") return { ...structuredClone(day.puzzles[`${kind}/classic`]), difficulty };
     return;
   }
   if (!puzzle) throw new Error(`Missing archived puzzle: ${date}/${kind}/${difficulty}`);

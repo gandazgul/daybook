@@ -40,7 +40,7 @@ Phaser renders at device pixel density (up to 3×) for clear text and lines on p
 | Balance         | Place three of each shape per row and column, with no three consecutive identical shapes; satisfy = and × clues          | 6 × 6 |
 | Sets            | Find exactly three different sets: each feature must be all the same or all different across three cards                  | 8 cards |
 | Dosun-Fuwari    | Place one supported balloon and one supported weight in each region                                                      | 6 × 6 |
-| Nurikabe        | Make numbered islands of exact sizes, with one clue each, surrounded by connected water with no solid 2 × 2 water blocks | 5 × 5 |
+| Nurikabe        | Make numbered islands of exact sizes, with one clue each, surrounded by connected water with no solid 2 × 2 water blocks | 5 × 5–9 × 9 |
 | Akari           | Illuminate every white square with bulbs; bulbs cannot shine on each other; satisfy neighboring-bulb counts on black squares | 6 × 6 |
 | Five Cells      | Partition the grid into connected groups of five; clues count bordering sides, including the outer frame                 | 5 × 5 |
 | Mosaic          | Shade squares so every clue matches the shaded cells in its surrounding 3 × 3 area, including itself                     | 6 × 6 |
@@ -89,11 +89,11 @@ a warm tint; conflicting bulbs and impossible numbered clues turn red. Optional 
 required for completion. Smart hints explain clue counts, illuminated exclusions, and the only
 remaining place that can light a square; reveal hints show one bulb or clearing move.
 
-New Nurikabe daily boards from September 25, 2026, and all new practice boards contain at most
+Nurikabe Easy and Original boards from September 25, 2026, and new Easy practice boards contain at most
 two single-square islands (zero and one are also allowed), including fallback boards. Older daily
 boards keep their original clues and saved progress.
 
-New Nurikabe daily boards from September 11, 2026, and all new practice boards include at least
+Nurikabe Easy and Original boards from September 11, 2026, and new Easy practice boards include at least
 one island larger than 1, including the generation fallback. Earlier daily boards remain unchanged
 to preserve saved progress. All new boards still have a solver-checked unique solution.
 
@@ -203,7 +203,7 @@ a complete logical solver for every position.
   current work is not interrupted.
 
 Published boards are fixed JSON snapshots in `src/archive/`, covering every date from
-**September 1–October 3, 2026**, all fourteen kinds, Original boards, and every difficulty supported at capture time.
+**September 1–October 4, 2026**, all fourteen kinds, Original boards, and every difficulty supported at capture time.
 The calendar starts in September 2026. Archived boards and their daily default difficulties load
 from this bundled data, including offline; later dates and practice use only the current generators.
 Old generator implementations and date-based quality switches have been removed. The existing
@@ -217,7 +217,7 @@ index. Then edit the current generator, run the checks, and ship the snapshots w
 The command refuses to export new days after source edits. No daily server job or growing collection
 of historical algorithms is needed; only the small puzzle data accumulates. Missing published archived boards
 fail to load rather than silently regenerate against a different algorithm. Newly introduced
-Shikaku variants are available as alternatives on older dates; Easy aliases the frozen Original board.
+Shikaku and Nurikabe variants are available as alternatives on older dates; Easy aliases the frozen Original board.
 
 Clearing browser data also clears your puzzle history. If storage is blocked, the collection shows
 that progress is temporary.
@@ -227,17 +227,29 @@ on desktop or below it on smaller screens.
 
 ## Difficulty
 
-Shikaku, Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
+Shikaku, Nurikabe, Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
 and practice. From **September 19, 2026**, the daily defaults are:
 
 | Game | Daily default | Easy | Medium | Hard |
 | --- | --- | --- | --- | --- |
 | Shikaku (from October 2) | Hard | 6 × 6, classic numbered rectangles | 7 × 7, mixed number/shape clues | 8 × 8, mostly shape-only clues |
+| Nurikabe (from October 2) | Hard | 5 × 5, current small islands | 7 × 7, islands of 2–5 cells | 9 × 9, islands of 2–6 cells |
 | Number Path (from September 25) | Hard | 5 × 5, 6 dots | 7 × 7, 12 dots | 7 × 7, 12 dots and 10 walls |
 | Regional Queens | Hard | 6 × 6, single available squares | 7 × 7, combined unit exclusions | 8 × 8, candidate contradiction trials |
 | Balance | Hard | Direct shape counts, triples, and = / × clues | Compatible row and column patterns | Candidate contradiction trials |
 | Sudoku | Easy | Naked and hidden singles | Naked pairs and locked candidates | Candidate contradiction trials |
 | Killer Sudoku | Easy | Singles and last-cell cage sums | Cage combinations, pairs, and locked candidates | Candidate contradiction trials |
+
+Nurikabe keeps the current 5 × 5 generator as Easy. Medium (7 × 7) and Hard (9 × 9) have no
+one-cell islands. Medium islands contain 2–5 cells, with at least one of size 4 or 5; Hard islands
+contain 2–6 cells, with at least one of size 5 or 6. At least 70% of their clues initially allow
+more than one connected island shape. These are structural difficulty profiles, not ratings based
+on human solving times or a guarantee that a particular advanced technique is required.
+Each level has 32 original, verified templates, rotated/reflected and varied by up to four bounded,
+uniqueness-checked clue relocations. Failed or exhausted checks revert to the verified template.
+The solver grows islands from their clues and checks both water connectivity and the no-pool rule.
+`scripts/build-nurikabe-bank.ts` authors the templates offline; archive published boards before
+replacing its output. Original archives and saves remain available.
 
 Number Path levels increase the board size and introduce walls that the path cannot cross. Walls
 leave a complete solution available; hints and saved paths respect them. Original daily boards
@@ -302,7 +314,7 @@ dates and pre-September-19 dates for the other three games retain their **Origin
 rated levels available as alternatives. Existing Original saves also resume after an update, even
 on a newer date. Original boards are not retroactively labeled as a rated tier.
 
-Practice asks for a level before opening these six games, remembers it separately for each game,
+Practice asks for a level before opening these seven games, remembers it separately for each game,
 and keeps it for **Another of these**. Practice progress remains session-only and separate from the
 daily calendar. The difficulty chooser pauses the timer; auto-update snapshots include the current
 level. Smart hints explain their supported deductions and can report that no deduction was found
@@ -443,7 +455,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **103 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **107 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
