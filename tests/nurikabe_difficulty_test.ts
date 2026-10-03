@@ -11,7 +11,13 @@ function assert(value: unknown, message = "Assertion failed"): asserts value {
 }
 function profile(clues: number[], n: number, level: "medium" | "hard") {
   const areas = clues.filter(Boolean), options = nurikabeOptions(clues, n);
-  assert(areas.every((v) => v >= 2 && v <= (level === "medium" ? 5 : 6)));
+  const singles = clues.flatMap((v, i) => v === 1 ? [i] : []);
+  assert(areas.every((v) => v >= 1 && v <= (level === "medium" ? 5 : 6)));
+  assert(level === "medium" ? singles.length <= 1 : singles.length >= 1 && singles.length <= 2);
+  if (singles.length === 2) {
+    assert(Math.abs(Math.floor(singles[0] / n) - Math.floor(singles[1] / n)) +
+      Math.abs(singles[0] % n - singles[1] % n) >= 5, "Hard anchors should be spread apart");
+  }
   assert(Math.max(...areas) >= (level === "medium" ? 4 : 5));
   assert(options.filter((o) => o.length > 1).length >= Math.ceil(options.length * .7));
   const result = solveNurikabe(clues, n);
@@ -47,6 +53,7 @@ Deno.test("all larger Nurikabe templates and extreme random sources preserve pro
   for (const level of ["medium", "hard"] as const) {
     const n = level === "medium" ? 7 : 9;
     assert(bank[level].length === 32);
+    assert(new Set(bank[level].map((p) => p.clues.filter((v) => v === 1).length)).size === 2);
     for (const source of bank[level]) {
       profile(source.clues, n, level);
       assert(validNurikabe(source.clues, source.solution, n));
@@ -110,7 +117,13 @@ Deno.test("Nurikabe defaults, lower-level daily credit, practice preferences and
   }
   choices.set("nurikabe", date, "easy");
   assert(new DifficultyChoices(disk).get("nurikabe", date) === "easy");
-  assert(choices.get("nurikabe", "2026-10-03") === "hard");
+  assert(dailyDifficulty("nurikabe", "2026-10-03") === "medium");
+  assert(choices.get("nurikabe", "2026-10-03") === "medium");
+  assert(choices.get("nurikabe", "2026-10-04") === "medium");
+  assert(choices.get("nurikabe", "2027-01-01") === "medium");
+  choices.set("nurikabe", "2026-10-03", "hard");
+  assert(new DifficultyChoices(disk).get("nurikabe", "2026-10-03") === "hard",
+    "Changing the default must preserve an explicit choice and its progress");
   choices.set("nurikabe", "practice:first", "hard");
   assert(choices.get("nurikabe", "practice:another") === "hard");
   const p = generate("nurikabe", "practice:credit", "hard"), progress = store.load(p);

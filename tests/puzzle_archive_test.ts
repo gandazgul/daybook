@@ -1,7 +1,9 @@
 import snapshots from "../src/archive/index.ts";
+import alternatives from "../src/archive/alternatives.json" with { type: "json" };
 import { ARCHIVE_END, ARCHIVE_START, archivedDay, archivedPuzzle } from "../src/puzzle-archive.ts";
 import { dailyDifficulty, DIFFICULTIES } from "../src/difficulty.ts";
-import { generate, isSolved, KINDS } from "../src/puzzles.ts";
+import { generate, isSolved, KINDS, type Kind } from "../src/puzzles.ts";
+import type { Difficulty } from "../src/difficulty.ts";
 import { ProgressStore, STORAGE_KEY } from "../src/storage.ts";
 
 function assert(value: unknown, message = "Assertion failed"): asserts value {
@@ -34,7 +36,10 @@ Deno.test("every archived variant preserves board identity, saved entries, notes
     assert(day.schema === 1 && /^[a-f0-9]{40}$/.test(day.revision));
     let count = 0;
     for (const kind of KINDS) {
-      assert(dailyDifficulty(kind, day.date) === ((kind === "shikaku" || kind === "nurikabe") && day.date >= "2026-10-02" ? "hard" : day.defaults[kind] ?? undefined));
+      const expectedDefault = kind === "nurikabe" && day.date >= "2026-10-03" ? "medium"
+        : (kind === "shikaku" || kind === "nurikabe") && day.date >= "2026-10-02" ? "hard"
+        : day.defaults[kind] ?? undefined;
+      assert(dailyDifficulty(kind, day.date) === expectedDefault);
       // Archives cover the levels that had actually shipped at their capture date.
       const shippedLevels = DIFFICULTIES.filter((level) => !!day.puzzles[`${kind}/${level}`]);
       for (const level of [undefined, ...shippedLevels]) {
@@ -69,6 +74,30 @@ Deno.test("every archived variant preserves board identity, saved entries, notes
     assert(Object.keys(day.puzzles).length === count, "archive coverage mismatch");
   }
 });
+Deno.test("published alternatives keep their original boards and saved progress after bank changes", async () => {
+  assert(alternatives.schema === 1 && alternatives.revision === "7c3dc1acd77f6acc40ba3199aeb077e172d9bb99");
+  assert(await digest(JSON.stringify(alternatives.puzzles)) ===
+    "14976733c6e11a3beceb73821f5b86cc9e3a9f914625ae7e764a9807d3623c9f");
+  const records = new Map<string, string>();
+  const disk = { getItem: (k: string) => records.get(k) ?? null, setItem: (k: string, v: string) => { records.set(k, v); } };
+  for (const [key, expected] of Object.entries(alternatives.puzzles)) {
+    const [date, kind, level] = key.split("/") as [string, Kind, Difficulty];
+    const p = generate(kind, date, level);
+    assert(JSON.stringify(p) === JSON.stringify(expected), `${key}: published alternative changed`);
+    assert(isSolved(p, p.solution));
+    const store = new ProgressStore(disk), progress = store.load(p);
+    progress.values = [...p.solution];
+    progress.elapsed = 560;
+    progress.completed = true;
+    store.save(date, kind, progress, level);
+    const reloaded = generate(kind, date, level), resumed = new ProgressStore(disk).load(reloaded);
+    assert(JSON.stringify(reloaded) === JSON.stringify(expected));
+    assert(resumed.completed && resumed.elapsed === 560);
+  }
+  for (let i = 0; i < 110; i++) generate("pipes", `alternative-eviction:${i}`);
+  assert(JSON.stringify(generate("nurikabe", "2026-10-03", "hard")) ===
+    JSON.stringify(alternatives.puzzles["2026-10-03/nurikabe/hard"]));
+});
 Deno.test("archive data survives runtime mutation and cache eviction", () => {
   const p = generate("nurikabe", "2026-09-24");
   const before = JSON.stringify(p);
@@ -98,7 +127,7 @@ Deno.test("calendar archive is contiguous and new dates and practice use current
   for (const seed of [next, "practice:archive-boundary"]) {
     assert(!archivedDay(seed));
     const p = generate("nurikabe", seed);
-    assert(p.clues.filter((clue) => clue === 1).length <= 2);
+    assert(p.clues.filter((clue) => clue === 1).length <= 1);
     assert(isSolved(p, p.solution));
     assert(dailyDifficulty("snap", seed) === "hard");
     assert(generate("snap", seed, "hard").edges.length === 10);

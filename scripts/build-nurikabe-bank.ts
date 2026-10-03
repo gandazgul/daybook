@@ -33,7 +33,8 @@ for (const level of ["medium", "hard"] as const) {
       i % n < n - 1 && i < n * (n - 1) && [i, i + 1, i + n, i + n + 1].every((j) => v[j] === 1)
     );
   for (let attempt = 0; bank[level].length < target && attempt < 30000; attempt++) {
-    const rng = new Random(`nurikabe-bank:v1:${level}:${attempt}`), values = Array(n * n).fill(2);
+    const rng = new Random(`nurikabe-bank:anchors:${level}:${attempt}`), values = Array(n * n).fill(2);
+    const anchors = (level === "hard" ? 1 : 0) + bank[level].length % 2;
     values[rng.int(values.length)] = 1;
     for (let step = 0; step < n * n; step++) {
       const frontier = rng.shuffle(
@@ -41,17 +42,21 @@ for (const level of ["medium", "hard"] as const) {
       );
       const cell = frontier.find((i) => {
         values[i] = 1;
-        const ok = !pool(values) && islands(values).every((s) => s.length >= 2);
+        const ok = !pool(values) && islands(values).filter((s) => s.length === 1).length <= anchors;
         values[i] = 2;
         return ok;
       });
       if (cell === undefined) break;
       values[cell] = 1;
       const groups = islands(values);
+      const singles = groups.filter((s) => s.length === 1).map((s) => s[0]);
       if (
         groups.length < Math.ceil(n * n / 9) || groups.some((s) => s.length > maxArea) ||
-        !groups.some((s) => s.length >= (level === "hard" ? 5 : 4))
+        !groups.some((s) => s.length >= (level === "hard" ? 5 : 4)) || singles.length !== anchors
       ) continue;
+      // Two anchors should offer starting points in different parts of a Hard board.
+      if (singles.length === 2 && Math.abs(Math.floor(singles[0] / n) - Math.floor(singles[1] / n)) +
+        Math.abs(singles[0] % n - singles[1] % n) < 5) continue;
       for (let placement = 0; placement < 3; placement++) {
         const clues = Array(n * n).fill(0);
         groups.forEach((cells) => clues[rng.pick(cells)] = cells.length);

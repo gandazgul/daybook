@@ -89,9 +89,9 @@ a warm tint; conflicting bulbs and impossible numbered clues turn red. Optional 
 required for completion. Smart hints explain clue counts, illuminated exclusions, and the only
 remaining place that can light a square; reveal hints show one bulb or clearing move.
 
-Nurikabe Easy and Original boards from September 25, 2026, and new Easy practice boards contain at most
-two single-square islands (zero and one are also allowed), including fallback boards. Older daily
-boards keep their original clues and saved progress.
+New Nurikabe Easy and Original boards and Easy practice boards contain at most one single-square
+island, including fallback boards. Published boards keep their original clues and saved progress;
+the September 25–October 4 snapshots may still have up to two.
 
 Nurikabe Easy and Original boards from September 11, 2026, and new Easy practice boards include at least
 one island larger than 1, including the generation fallback. Earlier daily boards remain unchanged
@@ -217,7 +217,10 @@ index. Then edit the current generator, run the checks, and ship the snapshots w
 The command refuses to export new days after source edits. No daily server job or growing collection
 of historical algorithms is needed; only the small puzzle data accumulates. Missing published archived boards
 fail to load rather than silently regenerate against a different algorithm. Newly introduced
-Shikaku and Nurikabe variants are available as alternatives on older dates; Easy aliases the frozen Original board.
+Shikaku and Nurikabe variants are available as alternatives on older dates. Published alternatives
+absent from the initial daily snapshots are frozen separately in `src/archive/alternatives.json`;
+the archive command captures these before a bank changes, without replacing existing boards or daily
+files. Easy alternatives preserve the frozen Original board.
 
 Clearing browser data also clears your puzzle history. If storage is blocked, the collection shows
 that progress is temporary.
@@ -233,16 +236,20 @@ and practice. From **September 19, 2026**, the daily defaults are:
 | Game | Daily default | Easy | Medium | Hard |
 | --- | --- | --- | --- | --- |
 | Shikaku (from October 2) | Hard | 6 × 6, classic numbered rectangles | 7 × 7, mixed number/shape clues | 8 × 8, mostly shape-only clues |
-| Nurikabe (from October 2) | Hard | 5 × 5, current small islands | 7 × 7, islands of 2–5 cells | 9 × 9, islands of 2–6 cells |
+| Nurikabe (Medium from October 3; Hard on October 2) | Medium | 5 × 5, at most one 1-cell island | 7 × 7, at most one 1-cell island | 9 × 9, one or two 1-cell anchors |
 | Number Path (from September 25) | Hard | 5 × 5, 6 dots | 7 × 7, 12 dots | 7 × 7, 12 dots and 10 walls |
 | Regional Queens | Hard | 6 × 6, single available squares | 7 × 7, combined unit exclusions | 8 × 8, candidate contradiction trials |
 | Balance | Hard | Direct shape counts, triples, and = / × clues | Compatible row and column patterns | Candidate contradiction trials |
 | Sudoku | Easy | Naked and hidden singles | Naked pairs and locked candidates | Candidate contradiction trials |
 | Killer Sudoku | Easy | Singles and last-cell cage sums | Cage combinations, pairs, and locked candidates | Candidate contradiction trials |
 
-Nurikabe keeps the current 5 × 5 generator as Easy. Medium (7 × 7) and Hard (9 × 9) have no
-one-cell islands. Medium islands contain 2–5 cells, with at least one of size 4 or 5; Hard islands
-contain 2–6 cells, with at least one of size 5 or 6. At least 70% of their clues initially allow
+Nurikabe Easy (5 × 5) and Medium (7 × 7) contain at most one 1-cell island; Hard (9 × 9) contains
+one or two, providing starting anchors. Two Hard anchors are separated by at least five orthogonal
+steps. Other Medium islands contain 2–5 cells, with at least one of size 4 or 5; other Hard islands
+contain 2–6 cells, with at least one of size 5 or 6. These limits apply to new dates beyond the archive
+and new practice boards; published daily boards keep their previous layouts, including their old
+singleton counts. The daily defaults to Medium from October 3; explicit difficulty choices and saved
+progress are retained. Completing any level still earns the day's credit. At least 70% of Medium/Hard clues initially allow
 more than one connected island shape. These are structural difficulty profiles, not ratings based
 on human solving times or a guarantee that a particular advanced technique is required.
 Each level has 32 original, verified templates, rotated/reflected and varied by up to four bounded,
@@ -455,7 +462,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **107 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **108 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,

@@ -20,7 +20,7 @@ export function generateLargerNurikabe(p: Puzzle, rng: Random, level: "medium" |
   // Move clues within their islands to vary verified templates. Failed or
   // exhausted checks revert, so runtime work stays bounded and uniqueness holds.
   for (let attempt = 0; attempt < 4; attempt++) {
-    const i = rng.pick(p.clues.flatMap((v, j) => v > 0 ? [j] : []));
+    const i = rng.pick(p.clues.flatMap((v, j) => v > 1 ? [j] : []));
     const cells = [i], seen = new Set(cells);
     for (let k = 0; k < cells.length; k++) {
       const x = cells[k];

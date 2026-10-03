@@ -12,7 +12,7 @@ export const DIFFICULTY_LABELS: Record<DifficultyChoice, string> = {
   classic: "Original",
 };
 export const DAILY_DIFFICULTIES: Partial<Record<Kind, Difficulty>> = {
-  queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard", nurikabe: "hard",
+  queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard", nurikabe: "medium",
 };
 export function supportsDifficulty(kind: Kind) {
   return DAILY_DIFFICULTIES[kind] !== undefined;
@@ -23,16 +23,17 @@ export function isDifficulty(value: unknown): value is Difficulty {
 export function dailyDifficulty(kind: Kind, date: string): Difficulty | undefined {
   if (!supportsDifficulty(kind)) return;
   if (kind === "shikaku" && date >= "2026-10-02") return DAILY_DIFFICULTIES.shikaku;
-  if (kind === "nurikabe" && date >= "2026-10-02") return DAILY_DIFFICULTIES.nurikabe;
+  if (kind === "nurikabe" && date >= "2026-10-03") return DAILY_DIFFICULTIES.nurikabe;
+  if (kind === "nurikabe" && date >= "2026-10-02") return "hard";
   const day = archivedDay(date);
   return day ? day.defaults[kind] ?? undefined : DAILY_DIFFICULTIES[kind];
 }
 export function difficultyDescription(kind: Kind, level: DifficultyChoice): string {
   if (level === "classic") return "The original daily board, with your existing progress.";
   if (kind === "nurikabe") return {
-    easy: "5 × 5 · Small islands and straightforward starting moves.",
-    medium: "7 × 7 · Larger islands; no one-cell islands.",
-    hard: "9 × 9 · Longer island routes and water connections; no one-cell islands.",
+    easy: "5 × 5 · Small islands; at most one single-cell island.",
+    medium: "7 × 7 · Larger islands; at most one single-cell island.",
+    hard: "9 × 9 · Longer island routes; one or two single-cell anchors.",
   }[level];
   if (kind === "shikaku") return {
     easy: "6 × 6 · Classic numbered rectangles.",

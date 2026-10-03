@@ -371,7 +371,7 @@ export function generateNurikabe(p: Puzzle, rng: Random) {
       values[cell] = 1;
       const islands = groups(values, n, (i) => values[i] === 2);
       if (islands.length < 4 || islands.length > 8 || islands.some((s) => s.length > 4)) continue;
-      if (islands.filter((island) => island.length === 1).length > 2) continue;
+      if (islands.filter((island) => island.length === 1).length > 1) continue;
       const clues = Array(n * n).fill(0);
       islands.forEach((cells) => clues[rng.pick(cells)] = cells.length);
       const result = solveNurikabe(clues, n);
@@ -385,8 +385,8 @@ export function generateNurikabe(p: Puzzle, rng: Random) {
   // A solver-verified board from our own generator; symmetry preserves its unique solution.
   // The 2- and 3-cell islands guarantee the fallback also satisfies the variety requirement.
   if (n !== 5) throw new Error("Nurikabe fallback requires a 5 × 5 board");
-  const clues = [0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2];
-  const solution = [1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2];
+  const clues = [0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 3, 0];
+  const solution = [1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 2, 1, 2, 1, 1, 1, 2, 2, 2, 1, 2, 2];
   const turns = rng.int(4), mirror = rng.int(2);
   p.clues = Array(n * n).fill(0);
   p.solution = Array(n * n).fill(0);

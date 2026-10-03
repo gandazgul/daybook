@@ -1,4 +1,4 @@
-/** Run BEFORE changing a published generator. Existing daily files are never overwritten. */
+/** Run BEFORE changing a published generator. Existing boards are never overwritten. */
 import { generate, KINDS } from "../src/puzzles.ts";
 import { dailyDifficulty, DIFFICULTIES, supportsDifficulty } from "../src/difficulty.ts";
 
@@ -18,6 +18,28 @@ const revision = new TextDecoder().decode(
   }).output()).stdout,
 ).trim();
 let checkedSource = false;
+async function requirePublishedSource() {
+  if (checkedSource) return;
+  const clean = await new Deno.Command("git", {
+    args: ["diff", "--quiet", "HEAD", "--", "src", ":(exclude)src/archive"],
+  }).output();
+  if (!clean.success) {
+    throw new Error("Archive before editing source; restore the published revision first.");
+  }
+  checkedSource = true;
+}
+// New difficulties can ship after a date's original snapshot was frozen.
+// Preserve these alternatives separately, leaving existing daily files untouched.
+const alternativesPath = new URL("alternatives.json", directory);
+let alternatives: { schema: number; revision: string; puzzles: Record<string, ReturnType<typeof generate>> } =
+  { schema: 1, revision, puzzles: {} };
+try {
+  alternatives = JSON.parse(await Deno.readTextFile(alternativesPath));
+  if (alternatives.schema !== 1 || !alternatives.puzzles) throw new Error("Unsupported alternatives archive");
+} catch (error) {
+  if (!(error instanceof Deno.errors.NotFound)) throw error;
+}
+let addedAlternatives = 0;
 const dates: string[] = [];
 for (let time = Date.UTC(2026, 8, 1);; time += 86400000) {
   const date = new Date(time).toISOString().slice(0, 10);
@@ -25,20 +47,21 @@ for (let time = Date.UTC(2026, 8, 1);; time += 86400000) {
   dates.push(date);
   const path = new URL(`${date}.json`, directory);
   try {
-    await Deno.stat(path);
+    const day = JSON.parse(await Deno.readTextFile(path));
+    for (const kind of KINDS.filter(supportsDifficulty)) {
+      for (const level of DIFFICULTIES) {
+        const key = `${date}/${kind}/${level}`;
+        if (day.puzzles[`${kind}/${level}`] || alternatives.puzzles[key]) continue;
+        await requirePublishedSource();
+        alternatives.puzzles[key] = generate(kind, date, level);
+        addedAlternatives++;
+      }
+    }
     continue;
   } catch (error) {
     if (!(error instanceof Deno.errors.NotFound)) throw error;
   }
-  if (!checkedSource) {
-    const clean = await new Deno.Command("git", {
-      args: ["diff", "--quiet", "HEAD", "--", "src", ":(exclude)src/archive"],
-    }).output();
-    if (!clean.success) {
-      throw new Error("Archive before editing source; restore the published revision first.");
-    }
-    checkedSource = true;
-  }
+  await requirePublishedSource();
   const puzzles: Record<string, ReturnType<typeof generate>> = {};
   const defaults: Record<string, string | null> = {};
   for (const kind of KINDS) {
@@ -53,6 +76,11 @@ for (let time = Date.UTC(2026, 8, 1);; time += 86400000) {
     { createNew: true },
   );
   console.log(`Archived ${date}: ${Object.keys(puzzles).length} boards`);
+}
+if (addedAlternatives) {
+  alternatives.revision = revision;
+  await Deno.writeTextFile(alternativesPath, JSON.stringify(alternatives) + "\n");
+  console.log(`Archived ${addedAlternatives} additional published difficulty boards`);
 }
 // Retain later snapshots if the command is rerun with an earlier end date.
 for await (const file of Deno.readDir(directory)) {

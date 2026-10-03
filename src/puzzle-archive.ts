@@ -1,4 +1,5 @@
 import snapshots from "./archive/index.ts";
+import alternatives from "./archive/alternatives.json" with { type: "json" };
 import type { Kind, Puzzle } from "./puzzles.ts";
 import type { Difficulty } from "./difficulty.ts";
 
@@ -24,13 +25,8 @@ export function archivedDay(date: string): ArchivedDay | undefined {
 export function archivedPuzzle(kind: Kind, date: string, difficulty?: Difficulty) {
   const day = archivedDay(date);
   if (!day) return;
-  const puzzle = day.puzzles[`${kind}/${difficulty ?? "classic"}`];
-  // These variants did not exist when the older snapshots were published.
-  // Easy is the original board; new variants can be played as alternatives.
-  if (!puzzle && (kind === "shikaku" || kind === "nurikabe") && difficulty && !day.puzzles[`${kind}/easy`]) {
-    if (difficulty === "easy") return { ...structuredClone(day.puzzles[`${kind}/classic`]), difficulty };
-    return;
-  }
+  const puzzle = day.puzzles[`${kind}/${difficulty ?? "classic"}`] ??
+    (alternatives.puzzles as Record<string, Puzzle>)[`${date}/${kind}/${difficulty}`];
   if (!puzzle) throw new Error(`Missing archived puzzle: ${date}/${kind}/${difficulty}`);
   // Runtime edits must never modify the source snapshot, including after cache eviction.
   return structuredClone(puzzle);
