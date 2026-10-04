@@ -3,6 +3,7 @@ import { AccessibleMenu, type MenuControl } from "./accessible-menu.ts";
 import { ScrollMomentum } from "./scroll.ts";
 import { shikakuRectangleError, type ShikakuShape } from "./shikaku.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
+import { balanceConflicts } from "./balance.ts";
 import {
   dailyDifficulty, DIFFICULTIES, DIFFICULTY_LABELS, difficultyDescription,
   DifficultyChoices, type DifficultyChoice, isDifficulty, supportsDifficulty,
@@ -1874,6 +1875,8 @@ class Daybook extends Phaser.Scene {
       ? rectangle(this.pointerStart >= 0 ? this.pointerStart : this.selected, this.selected, n)
       : [];
     const partitions = p.kind === "fivecells" ? fiveRegions(p.edges, a, n) : [];
+    const balanceErrors = p.kind === "mambo" ? balanceConflicts(a, n, p.links) : [];
+    const balanceErrorCells = new Set(balanceErrors.flatMap(({ cells }) => cells));
     const partitionSizes = new Map<number, number>();
     partitions.forEach((r) => partitionSizes.set(r, (partitionSizes.get(r) || 0) + 1));
     for (let i = 0; i < n * n; i++) {
@@ -2004,7 +2007,7 @@ class Daybook extends Phaser.Scene {
         this.drawShikakuClue(xx + s / 2, yy + s / 2, s, p.clues[i], p.shapes?.[i]);
       } else if (p.kind === "mambo") {
         const fixed = p.initial[i] > 0,
-          color = a[i] === 1 ? this.tint("shikaku") : this.tint("pipes");
+          color = balanceErrorCells.has(i) ? c.error : a[i] === 1 ? this.tint("shikaku") : this.tint("pipes");
         if (a[i] === 1) this.circle(xx + s / 2, yy + s / 2, s * .19, color);
         else if (a[i] === 2) this.diamond(xx + s / 2, yy + s / 2, s * .22, color);
         if (fixed) this.circle(xx + s - 8, yy + s - 8, 2.2, c.muted);
@@ -2068,8 +2071,10 @@ class Daybook extends Phaser.Scene {
           ay = y + ((link.a / n | 0) + .5) * s,
           bx = x + (link.b % n + .5) * s,
           by = y + ((link.b / n | 0) + .5) * s;
-        this.circle((ax + bx) / 2, (ay + by) / 2, s * .12, c.panel, c.line);
-        this.text((ax + bx) / 2, (ay + by) / 2, link.same ? "=" : "×", s * .22, c.ink).setOrigin(
+        const conflict = balanceErrors.some(({ kind, cells }) =>
+          kind === "link" && cells[0] === link.a && cells[1] === link.b);
+        this.circle((ax + bx) / 2, (ay + by) / 2, s * .12, c.panel, conflict ? c.error : c.line);
+        this.text((ax + bx) / 2, (ay + by) / 2, link.same ? "=" : "×", s * .22, conflict ? c.error : c.ink).setOrigin(
           .5,
         );
       }

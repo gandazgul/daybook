@@ -1,5 +1,6 @@
 import { smartHint } from "../src/hints.ts";
-import { type Puzzle } from "../src/puzzles.ts";
+import { balanceConflicts } from "../src/balance.ts";
+import { type Puzzle, validBalance } from "../src/puzzles.ts";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -118,4 +119,62 @@ Deno.test("Balance preserves ambiguity and allows identical completed lines", ()
   // Unlike some binary puzzles, Daybook has no distinct-rows rule.
   const repeated = board(["1122", "2211", "1122", "2210"]);
   verify(repeated);
+});
+
+Deno.test("Balance conflict hint highlights only the three circles in the reported column", () => {
+  const p = board(["122112", "122121", "211212", "211221", "121122", "212211"], [
+    { a: 4, b: 5, same: false }, { a: 2, b: 8, same: true },
+    { a: 5, b: 11, same: false }, { a: 9, b: 10, same: false },
+    { a: 9, b: 15, same: false }, { a: 10, b: 16, same: false },
+    { a: 11, b: 17, same: false }, { a: 12, b: 18, same: true },
+    { a: 20, b: 21, same: false }, { a: 26, b: 27, same: true },
+    { a: 25, b: 31, same: false }, { a: 26, b: 32, same: false },
+    { a: 27, b: 33, same: false },
+  ]);
+  const hint = smartHint(p, p.initial);
+  assert(!hint.values && hint.cells.join() === "14,20,26", "Highlight only row 3–5, column 3, not the whole board");
+  assert(hint.text.includes("column 3") && hint.text.includes("circles"), "Locate and explain the conflict");
+  assert(balanceConflicts(p.initial, p.size, p.links).flatMap((c) => c.cells).join() === "14,20,26", "Only these three shapes should be red");
+});
+
+Deno.test("Balance detects horizontal, vertical and overlapping triples without wrapping rows", () => {
+  for (const transpose of [false, true]) for (const shape of [1, 2]) {
+    const a = Array(36).fill(0);
+    const cells = [0, 1, 2, 3].map((i) => transpose ? i * 6 : i);
+    cells.forEach((i) => a[i] = shape);
+    const triples = balanceConflicts(a, 6, []).filter((c) => c.kind === "triple");
+    assert(triples.length === 2, "Four consecutive shapes contain two overlapping triples");
+    assert(new Set(triples.flatMap((c) => c.cells)).size === 4, "All four shapes must be red");
+  }
+  const wrapped = Array(36).fill(0);
+  [5, 6, 7].forEach((i) => wrapped[i] = 1);
+  assert(!balanceConflicts(wrapped, 6, []).length, "Do not join the end of one row to the next");
+});
+
+Deno.test("Balance link conflicts identify both shapes and clear after correction or erasing", () => {
+  for (const same of [true, false]) for (const b of [1, 6]) {
+    const p = board(Array(6).fill("000000"), [{ a: 0, b, same }]);
+    p.initial[0] = 1;
+    p.initial[b] = same ? 2 : 1;
+    const before = JSON.stringify([p.initial, p.links]);
+    const hint = smartHint(p, p.initial);
+    assert(hint.cells.join() === `0,${b}` && !hint.values, "Highlight just the broken clue pair");
+    assert(hint.text.includes(same ? "must match" : "must differ"), "Explain the specific sign");
+    assert(balanceConflicts(p.initial, 6, p.links)[0]?.kind === "link", "Mark the violated clue");
+    assert(JSON.stringify([p.initial, p.links]) === before, "Conflict check must not change player state");
+    p.initial[b] = same ? 1 : 2;
+    assert(!balanceConflicts(p.initial, 6, p.links).length, "Correction clears red feedback");
+    p.initial[b] = 0;
+    assert(!balanceConflicts(p.initial, 6, p.links).length, "An unfinished pair is not a conflict");
+  }
+});
+
+Deno.test("Balance conflict feedback agrees with the validator on every partial 3×3 board", () => {
+  // Exhaustive small inputs cover blanks, counts, triples and both link types.
+  const links = [{ a: 0, b: 1, same: true }, { a: 4, b: 7, same: false }];
+  for (let code = 0; code < 3 ** 9; code++) {
+    let rest = code;
+    const a = Array.from({ length: 9 }, () => { const v = rest % 3; rest = Math.floor(rest / 3); return v; });
+    assert((balanceConflicts(a, 3, links).length === 0) === validBalance(a, 3, links), "Conflict feedback and validity disagree");
+  }
 });

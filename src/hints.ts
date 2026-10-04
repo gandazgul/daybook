@@ -1,4 +1,5 @@
 import { findSets, setDescription } from "./sets.ts";
+import { balanceConflicts } from "./balance.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import { fiveCellOptions } from "./extra-puzzles.ts";
 import { shikakuClueCells, shikakuOptions, shikakuRectangleError, SHAPE_LABELS } from "./shikaku.ts";
@@ -369,27 +370,29 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
     }
     case "mambo": {
       const units = [...range(n).map((r) => row(r * n)), ...range(n).map(col)];
-      const violation = (values: number[]) => {
-        for (const cells of units) {
-          if ([1, 2].some((v) => cells.filter((i) => values[i] === v).length > n / 2)) {
-            return "give a row or column too many of one shape";
-          }
-          for (let k = 0; k < n - 2; k++) {
-            if (
-              values[cells[k]] && values[cells[k]] === values[cells[k + 1]] &&
-              values[cells[k]] === values[cells[k + 2]]
-            ) return "put three identical shapes consecutively";
-          }
-        }
-        for (const link of p.links) {
-          if (
-            values[link.a] && values[link.b] && ((values[link.a] === values[link.b]) !== link.same)
-          ) return "break an = or × clue";
-        }
-        return "";
+      const reasons = {
+        count: "give a row or column too many of one shape",
+        triple: "put three identical shapes consecutively",
+        link: "break an = or × clue",
       };
-      if (violation(a)) {
-        return problem(`The current entries ${violation(a)}. Correct that before continuing.`, all);
+      const violation = (values: number[]) => {
+        const conflict = balanceConflicts(values, n, p.links)[0];
+        return conflict ? reasons[conflict.kind] : "";
+      };
+      const conflict = balanceConflicts(a, n, p.links)[0];
+      if (conflict) {
+        const { cells, kind } = conflict;
+        const shape = a[cells[0]] === 1 ? "circles" : "diamonds";
+        const sameRow = Math.floor(cells[0] / n) === Math.floor(cells[1] / n);
+        const line = sameRow ? `row ${Math.floor(cells[0] / n) + 1}` : `column ${cells[0] % n + 1}`;
+        const text = kind === "triple"
+          ? `The three highlighted ${shape} are consecutive in ${line}. Three identical shapes cannot be together. Correct one of these entries before continuing.`
+          : kind === "count"
+          ? `The highlighted ${shape} give ${line} more than ${n / 2} of one shape. Each row and column needs exactly ${n / 2} circles and ${n / 2} diamonds.`
+          : a[cells[0]] === a[cells[1]]
+          ? "The two highlighted shapes match, but their × clue means they must differ. Correct one of these entries before continuing."
+          : "The two highlighted shapes differ, but their = clue means they must match. Correct one of these entries before continuing.";
+        return problem(text, cells);
       }
       for (const i of all.filter((i) => !a[i])) {
         const reasons = [1, 2].map((v) => {
