@@ -95,7 +95,7 @@ export const META: Record<
       "Find every ship in the fleet shown below the grid. Ships are straight lines of connected squares.",
       "Ships cannot touch each other, even diagonally. Numbers outside the grid count ship squares in each row or column.",
       "Revealed ship parts and water are fixed. A round part is a submarine; a rounded end points away from the rest of its ship.",
-      "Drag across the grid to paint water. Existing ships and fixed clues stay in place.",
+      "Drag from a blank cell to paint water; start on water to erase it. Existing ships and fixed clues stay in place.",
       "Tap a blank cell for water; tap water to place a ship; tap a ship to clear it. Double-click or double-tap places a ship directly.",
       "Keyboard: arrows select, Space cycles blank → water → ship → blank. Marking every water square is optional.",
     ], color: 0x49777b, pale: 0xe6efed,

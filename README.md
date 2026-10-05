@@ -548,11 +548,16 @@ straightness and no-touching deductions; Medium and Hard require reasoning about
 The six-cell fleet is one length-three ship, two length-two ships and three submarines. The eight-cell
 fleet is one length-four, two length-three, three length-two and three submarines.
 
-Drag to paint water, preserving existing ships and fixed clues. A tap cycles blank → water → ship → blank.
+Drag from a blank cell to paint water, or from water to erase water marks. Both preserve existing ships
+and fixed clues. A tap cycles blank → water → ship → blank.
 Double-click or double-tap places a ship directly, with both taps merged into one undo step. Dragging
 cannot accidentally place a ship when starting on water; each stroke is one undo step. Arrows and Space
 offer keyboard entry. Water marks are optional for completion. Revealed submarine, end and middle clues
 remain fixed, and the fleet legend stays visible during play. Hints use only visible constraints.
+Water appears as blue squares and ships as black pieces; diagonally touching pieces turn red.
+The fleet shows valid ships / required per length: green when complete, orange when missing and red
+when excessive. Bent, touching and unfinished clue ships do not count. Edge totals turn red for excess
+ship squares or when water marks leave too few spaces to reach the target.
 
 The bank authoring command is
 `deno run --allow-write=src/battleships-bank.json scripts/build-battleships-bank.ts`.

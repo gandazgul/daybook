@@ -3,8 +3,11 @@ import { dailyDifficulty, DifficultyChoices } from "../src/difficulty.ts";
 import { BattleshipsInput } from "../src/input.ts";
 import {
   deduceBattleships,
+  fleetInventory,
   type FleetClues,
+  shipLineStatus,
   shipParts,
+  touchingShipCells,
   solveBattleships,
   validBattleships,
 } from "../src/battleships.ts";
@@ -14,6 +17,53 @@ import { smartHint } from "../src/hints.ts";
 function assert(v: unknown, message = "Assertion failed"): asserts v {
   if (!v) throw new Error(message);
 }
+Deno.test("Battleships highlights both touching pieces, not the rest of their ships", () => {
+  const cells = [0, 6, 9, 10, 18, 20, 24, 27, 29, 30];
+  const values = Array.from({ length: 36 }, (_, i) => cells.includes(i) ? 1 : 2);
+  assert([...touchingShipCells(values, 6)].join() === "20,27", "October 4 screenshot conflict");
+  values[27] = 2;
+  assert(touchingShipCells(values, 6).size === 0, "clearing the contact must clear both warnings");
+  const joined = Array(36).fill(0);
+  for (const i of [0, 1, 2, 8]) joined[i] = 1;
+  assert([...touchingShipCells(joined, 6)].join() === "1,8");
+  const edges = Array(36).fill(0);
+  edges[5] = edges[6] = 1;
+  assert(touchingShipCells(edges, 6).size === 0, "row edges do not wrap");
+});
+Deno.test("Battleships inventory tracks placed, missing, excess and joined ships", () => {
+  const data: FleetClues = { rows: [], columns: [], fleet: [3, 2, 1], parts: Array(36).fill("") };
+  const values = Array(36).fill(0);
+  const count = (length: number) => fleetInventory(data, values, 6).find((v) => v.length === length)!;
+  assert(count(3).placed === 0 && count(3).required === 1);
+  for (const i of [0, 1, 2, 12, 13, 24, 26]) values[i] = 1;
+  assert(count(3).placed === 1 && count(2).placed === 1 && count(1).placed === 2);
+  values[25] = 1;
+  assert(count(1).placed === 0 && count(3).placed === 2, "joining pieces must update lengths");
+  values[3] = 1;
+  assert(count(4).placed === 1 && count(4).required === 0, "unexpected lengths must show excess");
+  values.fill(2);
+  assert(fleetInventory(data, values, 6).every((v) => v.placed === 0));
+});
+Deno.test("Battleships inventory excludes bent, touching and unfinished fixed ship clues", () => {
+  const data: FleetClues = { rows: [], columns: [], fleet: [3, 2, 1], parts: Array(36).fill("") };
+  for (const cells of [[0, 1, 7], [0, 7]]) {
+    const values = Array.from({ length: 36 }, (_, i) => cells.includes(i) ? 1 : 0);
+    assert(fleetInventory(data, values, 6).every((v) => v.placed === 0));
+  }
+  const values = Array(36).fill(0);
+  values[0] = 1;
+  data.parts[0] = "left";
+  assert(fleetInventory(data, values, 6).every((v) => v.placed === 0));
+  values[1] = 1;
+  assert(fleetInventory(data, values, 6).find((v) => v.length === 2)!.placed === 1);
+});
+Deno.test("Battleships edge totals flag excess ships and water blocking the required total", () => {
+  assert(shipLineStatus([1, 1, 0, 2], 1) === "error");
+  assert(shipLineStatus([1, 2, 2, 2], 2) === "error");
+  assert(shipLineStatus([1, 0, 2, 2], 2) === "missing");
+  assert(shipLineStatus([1, 1, 0, 2], 2) === "complete");
+  assert(shipLineStatus([0, 0, 2, 2], 0) === "complete");
+});
 Deno.test("Battleships makes fourteen daily games from October 4, with Medium default", () => {
   assert(
     kindsForDate("2026-10-04").length === 14 && kindsForDate("2026-10-04").includes("battleships"),
@@ -141,6 +191,26 @@ Deno.test("Battleships drags paint water, preserve ships and clues, interpolate 
   assert(!g.end(7, a, fixed, 200).marks.length, "cancelled gesture became a tap");
   g.begin(7);
   assert(!g.end(-1, a, fixed, 300).marks.length, "outside release became a tap");
+});
+Deno.test("Battleships water-start drags erase water throughout the stroke and preserve ships and clues", () => {
+  const g = new BattleshipsInput(), a = Array(36).fill(0), fixed = Array(36).fill(0);
+  for (const i of [0, 1, 3, 5, 11]) a[i] = 2;
+  a[2] = 1;
+  fixed[3] = 2;
+  fixed[4] = a[4] = 1;
+  g.begin(0);
+  const first = g.move(5, a, fixed, 6);
+  assert(first.map((m) => m.index).join() === "0,1,5");
+  assert(first.every((m) => m.value === 0));
+  first.forEach(({ index, value }) => a[index] = value);
+  const next = g.move(11, a, fixed, 6);
+  assert(next.length === 1 && next[0].index === 11 && next[0].value === 0);
+  next.forEach(({ index, value }) => a[index] = value);
+  assert(!g.move(0, a, fixed, 6).length, "backtracking must not repaint water");
+  assert(!g.end(0, a, fixed, 100).marks.length, "erasing must not become a ship tap");
+  assert(a[2] === 1 && a[3] === 2 && a[4] === 1);
+  g.begin(0);
+  assert(g.move(1, a, fixed, 6).every((m) => m.value === 2), "new blank-start stroke paints");
 });
 Deno.test("Battleships stores each level independently, awards one credit and hints use visible clues", () => {
   const records = new Map<string, string>(),

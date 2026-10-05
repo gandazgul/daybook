@@ -1,4 +1,4 @@
-import { shipParts, type ShipPart } from "./battleships.ts";
+import { fleetInventory, shipLineStatus, shipParts, touchingShipCells, type ShipPart } from "./battleships.ts";
 import { isSudoku, sudokuUnits } from "./mini-sudoku.ts";
 import { galaxyRegions, validGalaxyRegions } from "./galaxies.ts";
 import { ARCHIVE_START } from "./puzzle-archive.ts";
@@ -56,6 +56,7 @@ const LIGHT = {
   soft: 0xe9ede2,
   white: 0xffffff,
   error: 0xa95745,
+  warning: 0xa46548,
 };
 const DARK = {
   bg: 0x1c211f,
@@ -67,6 +68,7 @@ const DARK = {
   soft: 0x323e31,
   white: 0x242b27,
   error: 0xd9977f,
+  warning: 0xbd957e,
 };
 // Render at device density while keeping layout and game logic in CSS pixels.
 const RENDER_SCALE = Math.min(3, Math.max(1, globalThis.devicePixelRatio || 1));
@@ -998,9 +1000,11 @@ class Daybook extends Phaser.Scene {
           this.text(left + 2, top + 2, String(sum), 8, color);
         }
       } else {
-        this.text(x + 13, y + 7, "3", 15, color);
-        this.text(x + 32, y + 27, kind === "mini" ? "6" : "8", 15, color);
-        this.text(x + 13, y + 46, "1", 15, color);
+        const cellW = (s - 10) / 3, cellH = (s - 3) / 3;
+        const fontSize = Math.min(15, cellW * .8, cellH * .8);
+        for (const [col, row, digit] of [[0, 0, "3"], [2, 1, kind === "mini" ? "6" : "8"], [0, 2, "1"]] as const) {
+          this.text(x + 5 + (col + .5) * cellW, y + 2 + (row + .5) * cellH, digit, fontSize, color).setOrigin(.5);
+        }
       }
     } else if (kind === "battleships") {
       for (const [row, length] of [[0, 3], [1, 2], [2, 1]]) for (let i = 0; i < length; i++)
@@ -1491,7 +1495,8 @@ class Daybook extends Phaser.Scene {
     for (const [x, y, radius] of step.rings || []) {
       overlay.lineStyle(2, c.accent).strokeCircle(this.board.x + x * s, this.board.y + y * s, radius * s);
     }
-    if (p.kind === "battleships") this.drawFleet(bx, by + size + 7, size, step.boardExample?.fleet ?? p.fleet);
+    if (p.kind === "battleships") this.drawFleet(bx, by + size + 7, size, step.boardExample?.fleet ?? p.fleet,
+      step.boardExample?.values ?? (inHint ? this.hint?.values : undefined) ?? progress!.values, n);
     else if (legendHeight) {
       const legendWidth = wide ? boardSpace : width, legendX = wide ? left : (this.W - legendWidth) / 2;
       ["Land", "Water", "Blank"].forEach((label, index) => {
@@ -2421,43 +2426,52 @@ class Daybook extends Phaser.Scene {
   }
   shipPart(x: number, y: number, size: number, part: ShipPart, color: number) {
     const g = this.add.graphics().fillStyle(color), d = size * .66, r = d / 2;
-    if (part === "single") { g.fillCircle(x, y, r); return; }
+    const outline = this.night && color === 0x000000;
+    if (outline) g.lineStyle(1, this.C.muted);
+    if (part === "single") {
+      g.fillCircle(x, y, r);
+      if (outline) g.strokeCircle(x, y, r);
+      return;
+    }
     const radii = {tl: 0, tr: 0, bl: 0, br: 0};
     if (part === "top" || part === "left") radii.tl = r;
     if (part === "top" || part === "right") radii.tr = r;
     if (part === "bottom" || part === "left") radii.bl = r;
     if (part === "bottom" || part === "right") radii.br = r;
     g.fillRoundedRect(x - r, y - r, d, d, radii);
+    if (outline) g.strokeRoundedRect(x - r, y - r, d, d, radii);
   }
-  drawFleet(x: number, y: number, width: number, data = this.puzzle?.fleet) {
+  drawFleet(x: number, y: number, width: number, data = this.puzzle?.fleet,
+    values = this.progress!.values, n = this.puzzle!.size) {
     if (!data) return 0;
-    const lengths = [...new Set(data.fleet)].sort((a,b)=>b-a), slot = (width - 42) / lengths.length;
-    this.text(x, y + 10, "Fleet", 12, this.C.muted).setOrigin(0,.5);
-    lengths.forEach((length, k) => {
-      const left = x + 42 + k * slot, unit = Math.min(10, (slot - 23) / length);
+    const inventory = fleetInventory(data, values, n), slot = (width - 42) / inventory.length;
+    this.text(x, y + 8, "Fleet", 12, this.C.muted).setOrigin(0,.5);
+    this.text(x, y + 24, "valid", 10, this.C.muted).setOrigin(0,.5);
+    inventory.forEach(({length, placed, required}, k) => {
+      const center = x + 42 + (k + .5) * slot, unit = Math.min(10, (slot - 8) / length);
+      const left = center - unit * length / 2;
+      const color = placed > required ? this.C.error : placed === required ? this.C.accent : this.C.warning;
       for (let i = 0; i < length; i++) this.shipPart(left + unit * (i + .5), y + 10, unit * 1.2,
-        length === 1 ? "single" : i === 0 ? "left" : i === length - 1 ? "right" : "middle", this.C.ink);
-      this.text(left + unit * length + 3, y + 10, `×${data.fleet.filter((v)=>v===length).length}`, 12, this.C.ink).setOrigin(0,.5);
+        length === 1 ? "single" : i === 0 ? "left" : i === length - 1 ? "right" : "middle", color);
+      this.text(center, y + 24, `${placed} / ${required}`, 12, color).setOrigin(.5);
     });
     return 36;
   }
   drawBattleships() {
     const p = this.puzzle!, a = this.progress!.values, c = this.C;
     const {x,y,cell:s,n} = this.board, parts = shipParts(a,n), data = p.fleet!;
+    const touching = touchingShipCells(a,n);
     for (let i=0;i<n*n;i++) {
       const xx=x+i%n*s, yy=y+Math.floor(i/n)*s, fixed=!!p.initial[i];
       this.box(xx,yy,s,s, this.selected === i ? c.soft : c.panel,c.line,0);
-      if (a[i]===1) this.shipPart(xx+s/2,yy+s/2,s, fixed ? data.parts[i] || "ship" : parts[i],fixed?c.ink:this.tint("battleships"));
-      if (a[i]===2) {
-        const g=this.add.graphics().lineStyle(Math.max(1.5,s*.03),fixed?c.ink:c.muted);
-        g.lineBetween(xx+s*.37,yy+s*.37,xx+s*.63,yy+s*.63).lineBetween(xx+s*.63,yy+s*.37,xx+s*.37,yy+s*.63);
-      }
+      if (a[i]===1) this.shipPart(xx+s/2,yy+s/2,s, fixed ? data.parts[i] || "ship" : parts[i],touching.has(i)?c.error:0x000000);
+      if (a[i]===2) this.box(xx+2,yy+2,s-4,s-4,this.tint("nurikabe"),undefined,0);
       if(fixed)this.circle(xx+s-4,yy+s-4,1.7,c.muted);
     }
     for(const [axis,counts] of [data.rows,data.columns].entries()) counts.forEach((target,line)=>{
       const cells=Array.from({length:n},(_,k)=>axis?k*n+line:line*n+k);
-      const used=cells.filter((i)=>a[i]===1).length,unknown=cells.filter((i)=>!a[i]).length;
-      const color=used>target||used+unknown<target?c.error:used===target?c.accent:c.ink;
+      const status=shipLineStatus(cells.map((i)=>a[i]),target);
+      const color=status==="error"?c.error:status==="complete"?c.accent:c.ink;
       this.text(axis?x+(line+.5)*s:x-s*.4,axis?y-s*.4:y+(line+.5)*s,String(target),Math.min(22,s*.43),color).setOrigin(.5);
     });
     if(this.selected>=0){const xx=x+this.selected%n*s,yy=y+Math.floor(this.selected/n)*s;

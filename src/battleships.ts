@@ -38,6 +38,11 @@ export function shipParts(values: number[], n: number): ShipPart[] {
       : "bottom";
   });
 }
+export function touchingShipCells(values: number[], n: number) {
+  return new Set(values.flatMap((v, i) => v === 1 && shipNeighbors(i, n, true).some((j) =>
+    values[j] === 1 && i % n !== j % n && Math.floor(i / n) !== Math.floor(j / n)
+  ) ? [i] : []));
+}
 export function shipGroups(values: number[], n: number) {
   const seen = new Set<number>(), groups: number[][] = [];
   for (let i = 0; i < values.length; i++) {
@@ -55,6 +60,29 @@ export function shipGroups(values: number[], n: number) {
     groups.push(group);
   }
   return groups;
+}
+/** Count the straight, non-touching ships currently drawn, without consulting the solution. */
+export function fleetInventory(data: FleetClues, values: number[], n: number) {
+  const parts = shipParts(values, n);
+  const placed = shipGroups(values, n).filter((group) => {
+    const straight = group.every((i) => i % n === group[0] % n) ||
+      group.every((i) => Math.floor(i / n) === Math.floor(group[0] / n));
+    return straight && group.every((i) =>
+      (!data.parts[i] || data.parts[i] === "ship" || data.parts[i] === parts[i]) &&
+      shipNeighbors(i, n, true).every((j) => values[j] !== 1 || group.includes(j))
+    );
+  });
+  return [...new Set([...data.fleet, ...placed.map((g) => g.length)])].sort((a, b) => b - a)
+    .map((length) => ({
+      length,
+      placed: placed.filter((g) => g.length === length).length,
+      required: data.fleet.filter((v) => v === length).length,
+    }));
+}
+export function shipLineStatus(values: number[], target: number) {
+  const used = values.filter((v) => v === 1).length;
+  const available = values.filter((v) => v !== 2).length;
+  return used > target || available < target ? "error" : used === target ? "complete" : "missing";
 }
 export function validBattleships(data: FleetClues, values: number[], n: number) {
   if (values.length !== n * n || values.some((v) => ![0, 1, 2].includes(v))) return false;

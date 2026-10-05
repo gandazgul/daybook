@@ -129,6 +129,7 @@ export class BattleshipsInput {
   private start = -1;
   private last = -1;
   private dragged = false;
+  private dragValue = 2;
   private visited = new Set<number>();
   private lastTap?: { index: number; time: number };
   begin(index: number) {
@@ -138,13 +139,14 @@ export class BattleshipsInput {
   }
   move(index: number, values: number[], fixed: number[], size: number): Mark[] {
     if (this.start < 0 || index === this.last) return [];
+    if (!this.dragged) this.dragValue = values[this.start] === 2 ? 0 : 2;
     this.dragged = true;
     this.lastTap = undefined;
     const marks: Mark[] = [];
     for (const i of gridLine(this.last, index, size)) {
       if (this.visited.has(i)) continue;
       this.visited.add(i);
-      if (!fixed[i] && values[i] !== 1 && values[i] !== 2) marks.push({index:i,value:2});
+      if (!fixed[i] && values[i] !== 1 && values[i] !== this.dragValue) marks.push({index:i,value:this.dragValue});
     }
     this.last = index;
     return marks;

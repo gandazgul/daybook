@@ -218,10 +218,10 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
     case "battleships":
       return [
         step("Count ship squares", "The numbers above and beside the grid count ship squares in each column and row. A zero means the whole line is water."),
-        step("Find the whole fleet", "The fleet below the grid shows each ship length and how many you need. For example, three joined blocks ×1 means one ship of length three. Ships run straight across or down."),
-        step("Leave water between ships", "Different ships cannot touch, even at corners. Once you find a ship square, its diagonal neighbors must be water."),
+        step("Find the whole fleet", "The fleet counts valid ships / needed for each length. Green means enough, orange means missing, and red means too many. Touching, bent or unfinished clue ships do not count. Counts update as you join or erase pieces."),
+        step("Leave water between ships", "Different ships cannot touch, even at corners. Pieces that touch diagonally turn red. Once you find a ship square, its diagonal neighbors must be water."),
         step("Read revealed ship parts", "Starting clues are fixed and have a small corner dot. A round ship clue is a submarine. A rounded end has the rest of its ship on its flat side. A square middle clue continues on two opposite sides."),
-        step("Paint water", "Drag across the grid to paint water. The stroke preserves ships and fixed clues, and Undo reverses the whole stroke. Tap a blank cell to mark just that square as water."),
+        step("Paint or erase water", "Drag from a blank cell to paint water. Start on water to erase it. Both preserve ships and fixed clues, and Undo reverses the whole stroke. Tap a blank cell to mark just that square as water."),
         step("Place a ship", "Tap a water cell to turn it into a ship. Double-click or double-tap any editable cell to place a ship directly. Tap a ship once to clear it. With a keyboard, use arrows and Space."),
       ];
     case "galaxies":
