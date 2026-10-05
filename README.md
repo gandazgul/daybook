@@ -238,7 +238,7 @@ and practice. From **September 19, 2026**, the daily defaults are:
 
 | Game | Daily default | Easy | Medium | Hard |
 | --- | --- | --- | --- | --- |
-| Pipes | Original (pending local playtesting) | 5 × 5, neighboring-pipe deductions | 7 × 7, network connectivity deductions | 9 × 9, candidate contradiction trials |
+| Pipes (from October 5) | Medium | 5 × 5, neighboring-pipe deductions | 7 × 7, network connectivity deductions | 9 × 9, candidate contradiction trials |
 | Shikaku (from October 2) | Hard | 6 × 6, classic numbered rectangles | 7 × 7, mixed number/shape clues | 8 × 8, mostly shape-only clues |
 | Nurikabe (Medium from October 3; Hard on October 2) | Medium | 5 × 5, at most one 1-cell island | 7 × 7, at most one 1-cell island | 9 × 9, one or two 1-cell anchors |
 | Number Path (from September 25) | Hard | 5 × 5, 6 dots | 7 × 7, 12 dots | 7 × 7, 12 dots and 10 walls |
@@ -247,7 +247,8 @@ and practice. From **September 19, 2026**, the daily defaults are:
 | Sudoku | Easy | Naked and hidden singles | Naked pairs and locked candidates | Candidate contradiction trials |
 | Killer Sudoku | Easy | Singles and last-cell cage sums | Cage combinations, pairs, and locked candidates | Candidate contradiction trials |
 
-Pipes keeps the current 5 × 5 Original daily default while its new levels are playtested locally.
+Pipes defaults to 7 × 7 Medium from October 5, 2026. Earlier dates keep Original, and existing
+Original saves and explicit difficulty choices still resume without changing the board.
 All three levels keep the familiar rotation and source highlighting; wrapping is not included.
 Easy solves from board boundaries and neighboring pipe shapes; Medium requires additional network
 deductions (connections that are the only route between sections, or that would isolate a section);

@@ -12,10 +12,10 @@ export const DIFFICULTY_LABELS: Record<DifficultyChoice, string> = {
   classic: "Original",
 };
 export const DAILY_DIFFICULTIES: Partial<Record<Kind, Difficulty>> = {
-  battleships: "medium", galaxies: "medium", queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard", nurikabe: "medium",
+  pipes: "medium", battleships: "medium", galaxies: "medium", queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard", nurikabe: "medium",
 };
 export function supportsDifficulty(kind: Kind) {
-  return kind === "pipes" || DAILY_DIFFICULTIES[kind] !== undefined;
+  return DAILY_DIFFICULTIES[kind] !== undefined;
 }
 export function isDifficulty(value: unknown): value is Difficulty {
   return DIFFICULTIES.includes(value as Difficulty);
@@ -23,6 +23,7 @@ export function isDifficulty(value: unknown): value is Difficulty {
 export function dailyDifficulty(kind: Kind, date: string): Difficulty | undefined {
   if (!supportsDifficulty(kind)) return;
   if (kind === "galaxies" || kind === "battleships") return "medium";
+  if (kind === "pipes" && date >= "2026-10-05") return DAILY_DIFFICULTIES.pipes;
   if (kind === "shikaku" && date >= "2026-10-02") return DAILY_DIFFICULTIES.shikaku;
   if (kind === "nurikabe" && date >= "2026-10-03") return DAILY_DIFFICULTIES.nurikabe;
   if (kind === "nurikabe" && date >= "2026-10-02") return "hard";

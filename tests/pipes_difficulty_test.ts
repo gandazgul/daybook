@@ -126,15 +126,19 @@ Deno.test("rated Pipes vary and regenerate deterministically; smart hints solve 
     assert(deducePipes(p.initial, p.size, level).valid);
   }
 });
-Deno.test("Pipes daily remains Original; level choices, daily credit and legacy progress stay separate", () => {
+Deno.test("Pipes defaults to Medium from October 5 while historical boards, choices and progress stay separate", () => {
   const data = new Map<string, string>(), disk = {
     getItem: (k: string) => data.get(k) ?? null,
     setItem: (k: string, v: string) => { data.set(k, v); },
   };
   const store = new ProgressStore(disk), choices = new DifficultyChoices(disk), date = "2026-10-04";
   assert(supportsDifficulty("pipes"));
-  for (const seed of ["2026-09-01", date, "2026-10-06", "2027-01-01"]) {
+  for (const seed of ["2026-09-01", date]) {
     assert(dailyDifficulty("pipes", seed) === undefined && choices.get("pipes", seed) === "classic");
+  }
+  for (const seed of ["2026-10-05", "2026-10-06", "2027-01-01"]) {
+    assert(dailyDifficulty("pipes", seed) === "medium" && choices.get("pipes", seed) === "medium");
+    assert(generate("pipes", seed, "medium").size === 7);
   }
   const original = generate("pipes", date), old = store.load(original), before = JSON.stringify(original);
   old.values = [...original.solution]; old.elapsed = 127; old.completed = true;
@@ -148,7 +152,17 @@ Deno.test("Pipes daily remains Original; level choices, daily credit and legacy 
   assert(JSON.stringify(generate("pipes", date)) === before && new ProgressStore(disk).load(original).elapsed === 127);
   choices.set("pipes", date, "hard");
   assert(new DifficultyChoices(disk).get("pipes", date) === "hard");
-  assert(choices.get("pipes", "2026-10-05") === "classic");
+  assert(choices.get("pipes", "2026-10-05") === "medium");
+  const currentOriginal = generate("pipes", "2026-10-05");
+  const started = store.load(currentOriginal);
+  started.elapsed = 42;
+  store.save(currentOriginal.seed, "pipes", started);
+  const resumed = new DifficultyChoices(disk, (kind, seed) => !!store.get(seed, kind));
+  assert(resumed.get("pipes", "2026-10-05") === "classic", "existing Original progress must resume");
+  resumed.set("pipes", "2026-10-05", "hard");
+  assert(new DifficultyChoices(disk).get("pipes", "2026-10-05") === "hard");
+  assert(resumed.get("pipes", "2026-10-06") === "medium");
+  assert(resumed.get("pipes", "practice:new") === "medium");
   choices.set("pipes", "practice:first", "easy");
   assert(new DifficultyChoices(disk).get("pipes", "practice:another") === "easy");
 });
