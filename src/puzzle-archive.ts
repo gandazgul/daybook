@@ -27,6 +27,11 @@ export function archivedPuzzle(kind: Kind, date: string, difficulty?: Difficulty
   if (!day) return;
   const puzzle = day.puzzles[`${kind}/${difficulty ?? "classic"}`] ??
     (alternatives.puzzles as Record<string, Puzzle>)[`${date}/${kind}/${difficulty}`];
+  // Rated Pipes did not exist when these daily snapshots were published.
+  // Its new alternatives are available without changing the Original board.
+  // New games have no published boards in these older snapshots.
+  if (!puzzle && date <= "2026-10-05" && (kind === "mini" || kind === "galaxies" || kind === "battleships")) return;
+  if (!puzzle && kind === "pipes" && difficulty && !day.puzzles["pipes/easy"]) return;
   if (!puzzle) throw new Error(`Missing archived puzzle: ${date}/${kind}/${difficulty}`);
   // Runtime edits must never modify the source snapshot, including after cache eviction.
   return structuredClone(puzzle);

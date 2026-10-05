@@ -136,7 +136,7 @@ Deno.test("new games persist marks/borders and preserve old calendar completion"
   });
   assert(kindsForDate("2026-09-08").length === 8);
   assert(kindsForDate("2026-09-09").length === 11);
-  assert(KINDS.length === 14);
+  assert(KINDS.length === 17);
   for (const kind of kindsForDate("2026-09-08")) {
     const p = generate(kind, "2026-09-08"), progress = store.load(p);
     progress.values = [...p.solution];

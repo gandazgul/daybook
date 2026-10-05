@@ -84,12 +84,15 @@ export class ProgressStore {
   }
   private validEntries(p: Puzzle, a: number[]): boolean {
     switch (p.kind) {
+      case "mini":
       case "sudoku":
       case "killer":
       case "mambo":
         return a.every((v, i) =>
-          v >= 0 && v <= (p.kind === "mambo" ? 2 : 9) && (!p.initial[i] || v === p.initial[i])
+          v >= 0 && v <= (p.kind === "mambo" ? 2 : p.size) && (!p.initial[i] || v === p.initial[i])
         );
+      case "battleships":
+        return a.every((v, i) => v >= 0 && v <= 2 && (!p.initial[i] || v === p.initial[i]));
       case "pipes":
         return a.every((v) => v >= 1 && v <= 15);
       case "atoms":
@@ -103,6 +106,7 @@ export class ProgressStore {
       case "akari":
         return a.every((v, i) => p.initial[i] === -1 ? v === -1 : v >= 0 && v <= 2);
       case "sets":
+      case "galaxies":
       case "fivecells":
         return a.every((v) => v === 0 || v === 1);
       case "shikaku":

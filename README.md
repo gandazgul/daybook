@@ -1,6 +1,6 @@
 # Daybook
 
-A quiet collection of **twelve daily logic puzzles**, with unlimited practice, guided tutorials, and
+A quiet collection of **fourteen daily logic puzzles**, with unlimited practice, guided tutorials, and
 offline play. Built with **Phaser 3, TypeScript, Vite, and Deno 2**; the puzzle boards,
 illustrations, menus, and controls are drawn in the game engine.
 
@@ -32,7 +32,7 @@ Phaser renders at device pixel density (up to 3×) for clear text and lines on p
 
 | Game            | Goal                                                                                                                     | Board |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----- |
-| Pipes           | Rotate pipes to connect every tile and endpoint to the water source without leaks                                        | 5 × 5 |
+| Pipes           | Rotate pipes to connect every tile and endpoint to the water source without leaks                                        | 5 × 5–9 × 9 |
 | Atoms           | Match each atom's required bonds using one or two lines between adjacent atoms; connect the whole network                | 4 × 4 |
 | Regional Queens | Place one queen per row, column, and region; queens cannot touch, even diagonally                                        | 6 × 6–8 × 8 |
 | Shikaku         | Cover the grid with one clue per rectangle; match optional areas and square, wide, or tall shape clues                    | 6 × 6–8 × 8 |
@@ -44,7 +44,10 @@ Phaser renders at device pixel density (up to 3×) for clear text and lines on p
 | Akari           | Illuminate every white square with bulbs; bulbs cannot shine on each other; satisfy neighboring-bulb counts on black squares | 6 × 6 |
 | Five Cells      | Partition the grid into connected groups of five; clues count bordering sides, including the outer frame                 | 5 × 5 |
 | Mosaic          | Shade squares so every clue matches the shaded cells in its surrounding 3 × 3 area, including itself                     | 6 × 6 |
-| Sudoku          | Place 1–9 once in each row, column, and 3 × 3 box                                                                        | 9 × 9 |
+| Mini Sudoku     | Place 1–6 once in each row, column, and 2 × 3 box; one difficulty with at most ten starting digits                         | 6 × 6 |
+| Battleships     | Find a fleet of straight ships from row/column totals; ships never touch, even diagonally | 6 × 6 or 8 × 8 |
+| Galaxies        | Divide the grid into connected regions with one circle each, symmetric under a half-turn around that circle              | 5 × 5 or 7 × 7 |
+| Sudoku (practice) | Place 1–9 once in each row, column, and 3 × 3 box                                                                        | 9 × 9 |
 | Killer Sudoku   | Follow Sudoku rules and satisfy cage totals, without repeating digits inside a cage                                      | 9 × 9 |
 
 Sets uses muted sage, clay and lavender cards with three shapes, counts and fills. Each generated
@@ -55,11 +58,11 @@ one new set after preview.
 
 Five Cells and Mosaic are **practice-only** in current collections. Akari replaces Five Cells in
 the daily slot from September 14, 2026. Older calendar dates retain Five Cells and its saved progress;
-Mosaic never counts toward daily completion. All fourteen games are available in practice.
+Mosaic never counts toward daily completion. All seventeen games are available in practice. Regular 9 × 9 Sudoku leaves the daily collection from October 4, 2026; earlier dates and practice keep it unchanged.
 
-Completion is checked against each game's rules. Sudoku, Killer Sudoku, Regional Queens, Shikaku,
-Balance, Mosaic, Dosun-Fuwari, Nurikabe, Five Cells, and Akari have solver-checked unique solutions. Pipes,
-Atoms, and Number Path are generated from valid constructions and accept any valid solution.
+Completion is checked against each game's rules. Battleships, Mini Sudoku, Galaxies, Sudoku, Killer Sudoku, Regional Queens, Shikaku,
+Balance, Mosaic, Dosun-Fuwari, Nurikabe, Five Cells, Akari, and rated Pipes have solver-checked unique solutions.
+Original Pipes, Atoms, and Number Path are generated from valid constructions and accept any valid solution.
 
 Regional Queens uses the regional placement rules, so queens do not attack along an entire chess
 diagonal. Balance does not require different rows to have unique patterns. Atoms connects only
@@ -187,7 +190,7 @@ a complete logical solver for every position.
   September 11, 2026. Akari replaces Five Cells on September 14, keeping twelve daily games.
   All fourteen games are available in practice, including Five Cells and Mosaic. Mosaic never
   counts toward the daily total. Existing saved puzzle identifiers are unchanged.
-- Sudoku and Killer Sudoku appear last in daily and practice collections, and in the next-puzzle order.
+- From **October 4, 2026**, Mini Sudoku replaces regular Sudoku; Galaxies and Battleships join the daily collection, bringing it to fourteen games. Earlier lineups and published puzzle files are preserved. Mini Sudoku and Killer Sudoku close the daily collection; regular Sudoku remains in practice.
 - The featured game rotates through the kinds available on that date. Puzzles generate on demand, so
   an unattended server needs no cron job.
 - The calendar allows past dates and prevents future-day play. A day is complete when all games
@@ -203,7 +206,7 @@ a complete logical solver for every position.
   current work is not interrupted.
 
 Published boards are fixed JSON snapshots in `src/archive/`, covering every date from
-**September 1–October 4, 2026**, all fourteen kinds, Original boards, and every difficulty supported at capture time.
+**September 1–October 5, 2026**, all fourteen kinds, Original boards, and every difficulty supported at capture time.
 The calendar starts in September 2026. Archived boards and their daily default difficulties load
 from this bundled data, including offline; later dates and practice use only the current generators.
 Old generator implementations and date-based quality switches have been removed. The existing
@@ -230,11 +233,12 @@ on desktop or below it on smaller screens.
 
 ## Difficulty
 
-Shikaku, Nurikabe, Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
+Pipes, Shikaku, Nurikabe, Number Path, Regional Queens, Balance, Sudoku, and Killer Sudoku support **Easy / Medium / Hard** in daily play
 and practice. From **September 19, 2026**, the daily defaults are:
 
 | Game | Daily default | Easy | Medium | Hard |
 | --- | --- | --- | --- | --- |
+| Pipes | Original (pending local playtesting) | 5 × 5, neighboring-pipe deductions | 7 × 7, network connectivity deductions | 9 × 9, candidate contradiction trials |
 | Shikaku (from October 2) | Hard | 6 × 6, classic numbered rectangles | 7 × 7, mixed number/shape clues | 8 × 8, mostly shape-only clues |
 | Nurikabe (Medium from October 3; Hard on October 2) | Medium | 5 × 5, at most one 1-cell island | 7 × 7, at most one 1-cell island | 9 × 9, one or two 1-cell anchors |
 | Number Path (from September 25) | Hard | 5 × 5, 6 dots | 7 × 7, 12 dots | 7 × 7, 12 dots and 10 walls |
@@ -242,6 +246,18 @@ and practice. From **September 19, 2026**, the daily defaults are:
 | Balance | Hard | Direct shape counts, triples, and = / × clues | Compatible row and column patterns | Candidate contradiction trials |
 | Sudoku | Easy | Naked and hidden singles | Naked pairs and locked candidates | Candidate contradiction trials |
 | Killer Sudoku | Easy | Singles and last-cell cage sums | Cage combinations, pairs, and locked candidates | Candidate contradiction trials |
+
+Pipes keeps the current 5 × 5 Original daily default while its new levels are playtested locally.
+All three levels keep the familiar rotation and source highlighting; wrapping is not included.
+Easy solves from board boundaries and neighboring pipe shapes; Medium requires additional network
+deductions (connections that are the only route between sections, or that would isolate a section);
+Hard additionally requires candidate contradiction trials. Each level has 32 original, solver-verified
+unique templates, varied by rotation/reflection and fresh scrambling. Every template has at least
+two orientations fixed by the boundary, and at least 40% of tiles start rotated away from their
+solution. These are ratings under the implemented deductions, not measured human solving times.
+Smart hints use visible shapes and the same deductions, without reading the answer. The offline
+authoring script is `scripts/build-pipes-bank.ts`; archive published boards before replacing its bank.
+New rated alternatives are available on historical dates without changing their Original boards.
 
 Nurikabe Easy (5 × 5) and Medium (7 × 7) contain at most one 1-cell island; Hard (9 × 9) contains
 one or two, providing starting anchors. Two Hard anchors are separated by at least five orthogonal
@@ -285,7 +301,7 @@ Original archived Shikaku boards remain playable; Easy uses those same number-on
 alternatives on archived dates. Medium/Hard alternatives are newly introduced rather than existing
 published boards. From October 2 the daily default is Hard; an existing Original save still resumes.
 
-Balance stays 6 × 6; both Sudokus stay 9 × 9. Their ratings, and those for Queens, describe the logical techniques required,
+Balance stays 6 × 6; regular Sudoku and Killer Sudoku stay 9 × 9. Their ratings, and those for Queens, describe the logical techniques required,
 not measured human solving times. Rating solvers use visible constraints only, never the stored
 answer. Every rated board has a unique solution; Hard needs at least one candidate trial beyond
 Medium deductions, using contradiction proofs without recursive guessing.
@@ -321,7 +337,7 @@ dates and pre-September-19 dates for the other three games retain their **Origin
 rated levels available as alternatives. Existing Original saves also resume after an update, even
 on a newer date. Original boards are not retroactively labeled as a rated tier.
 
-Practice asks for a level before opening these seven games, remembers it separately for each game,
+Practice asks for a level before opening these eight games, remembers it separately for each game,
 and keeps it for **Another of these**. Practice progress remains session-only and separate from the
 daily calendar. The difficulty chooser pauses the timer; auto-update snapshots include the current
 level. Smart hints explain their supported deductions and can report that no deduction was found
@@ -462,7 +478,7 @@ Framework references: [Vite with Deno](https://docs.deno.com/examples/vite_tutor
 
 ## Verification
 
-The current code passes **108 regression tests**, TypeScript checking, lint, and a production build.
+The current code passes **116 regression tests**, TypeScript checking, lint, and a production build.
 Run the maintained checks with `deno task check`, `deno task test`, and `deno task build`.
 
 The regression suite covers deterministic generation, uniqueness where required, rule validation,
@@ -500,3 +516,44 @@ screenshots, artwork, or puzzle collections from other games are included.
 EventEmitter3, and the Vite build tool. Each production build also emits `dependency-licenses.txt`
 with notices for bundled dependencies. The Deno runtime is distributed separately; see its
 [license](https://github.com/denoland/deno/blob/main/LICENSE.md).
+
+### Mini Sudoku and Galaxies (October 4, 2026)
+
+Mini Sudoku has 6 × 6 cells, 2-row × 3-column boxes, digits 1–6, and no difficulty chooser.
+Its seeded generator removes clues while retaining a unique solution, leaving at most ten givens.
+Notes, multi-selection, double-tap entry, conflict checks, hints, undo/redo and keypad completion
+use six digits and rectangular boxes. Existing regular Sudoku practice boards and levels are unchanged.
+
+Galaxies follows the rules at <https://www.puzzle-galaxies.com/>. Easy maps to **5 × 5 Hard**,
+Medium (the daily and practice default) to **7 × 7 Normal**, and Hard to **7 × 7 Hard**. These are
+locally authored boards, not copies of that site's puzzle bank or its private difficulty algorithm.
+Each tier has 24 unique templates plus rotations/reflections. Normal boards solve through symmetry,
+center ownership and connected reachability; Hard templates require additional candidate trials
+under that solver. Regenerate the bank with
+`deno run --allow-write=src/galaxies-bank.json scripts/build-galaxies-bank.ts`.
+
+Draw or erase borders by tapping/dragging grid lines, or use arrows and Shift+arrow. Each connected
+region must have exactly one circle and 180° rotational symmetry. Circles can be in cells, on edges
+or at corners. Dangling internal cuts and split circles are invalid. Completed regions gain color.
+Smart hints use only visible centers and drawn walls; answer reveals are separate. Difficulty levels
+have independent progress and contribute one shared daily credit.
+
+### Battleships (October 4, 2026)
+
+Battleships follows the solitaire rules at <https://www.puzzle-battleships.com/>. Easy is **6 × 6 Easy**,
+Medium (the default) is **6 × 6 Hard**, and the provisional Hard tier is **8 × 8 Hard**. Each tier
+contains 24 locally authored, solver-checked unique boards plus rotations and reflections. The site’s
+private rating algorithm is not reproduced: Easy boards solve through local totals, revealed parts,
+straightness and no-touching deductions; Medium and Hard require reasoning about possible fleet placements.
+The six-cell fleet is one length-three ship, two length-two ships and three submarines. The eight-cell
+fleet is one length-four, two length-three, three length-two and three submarines.
+
+Drag to paint water, preserving existing ships and fixed clues. A tap cycles blank → water → ship → blank.
+Double-click or double-tap places a ship directly, with both taps merged into one undo step. Dragging
+cannot accidentally place a ship when starting on water; each stroke is one undo step. Arrows and Space
+offer keyboard entry. Water marks are optional for completion. Revealed submarine, end and middle clues
+remain fixed, and the fleet legend stays visible during play. Hints use only visible constraints.
+
+The bank authoring command is
+`deno run --allow-write=src/battleships-bank.json scripts/build-battleships-bank.ts`.
+Published archives stay unchanged, as do the other games’ seeds and storage keys.

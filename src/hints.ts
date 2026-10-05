@@ -1,9 +1,13 @@
+import { deduceBattleships, solveBattleships } from "./battleships.ts";
+import { sudokuUnits } from "./mini-sudoku.ts";
+import { solveGalaxies } from "./galaxies.ts";
 import { findSets, setDescription } from "./sets.ts";
 import { balanceConflicts } from "./balance.ts";
 import { akariLights, AKARI_WHITE } from "./akari.ts";
 import { fiveCellOptions } from "./extra-puzzles.ts";
+import { deducePipes } from "./pipes-logic.ts";
 import { shikakuClueCells, shikakuOptions, shikakuRectangleError, SHAPE_LABELS } from "./shikaku.ts";
-import { adjacent, canStepNumberPath, direction, isSolved, type Puzzle, rectangle, rotate } from "./puzzles.ts";
+import { adjacent, canStepNumberPath, isSolved, type Puzzle, rectangle } from "./puzzles.ts";
 
 /** Smart hints deliberately cannot access a generated answer. Entries are treated as assumptions. */
 type VisiblePuzzle = Omit<Puzzle, "solution" | "seed">;
@@ -54,6 +58,20 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
   const col = (i: number) => all.filter((j) => i % n === j % n);
   const put = (i: number, v: number, why: string, cells = [i]) => move(a, i, v, why, cells);
   switch (p.kind) {
+    case "battleships": {
+      const deduction = deduceBattleships(p.fleet!, a, n);
+      if (deduction.conflict) return problem("The entries conflict with a row or column total, a revealed ship part, or the rule that ships cannot touch. Check the marked ships and water.", all);
+      const next = deduction.moves[0];
+      if (next) return put(next.index, next.value, next.text, next.cells);
+      const solved = solveBattleships(p.fleet!, a, n, 2, 30000);
+      if (!solved.exhausted && !solved.solutions.length) return problem("No arrangement of the required fleet fits these entries. Check the ship and water marks.", all);
+      if (!solved.exhausted && solved.solutions.length === 1) {
+        const i = a.findIndex((v) => !v);
+        if (i >= 0) return put(i, solved.solutions[0][i],
+          `Combining the fleet sizes, row and column totals, revealed parts and no-touching rule leaves one possible arrangement. This square must be ${solved.solutions[0][i] === 1 ? "a ship" : "water"}.`, [i]);
+      }
+      break;
+    }
     case "akari": {
       const { sight, lit, conflicts } = akariLights(p.clues, a, n);
       if (conflicts.size) return problem(
@@ -99,15 +117,10 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
         values,
       };
     }
+    case "mini":
     case "sudoku":
     case "killer": {
-      const units = [
-        ...range(9).map((r) => row(r * 9)),
-        ...range(9).map(col),
-        ...range(9).map((b) =>
-          all.filter((i) => Math.floor(i / 27) * 3 + Math.floor(i % 9 / 3) === b)
-        ),
-      ];
+      const units = sudokuUnits(n);
       const unique = [...units, ...p.cages.map((c) => c.cells)];
       for (const cells of unique) {
         const filled = cells.filter((i) => a[i]);
@@ -121,7 +134,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
       const candidates = all.map((i) =>
         a[i]
           ? []
-          : range(9).map((v) => v + 1).filter((v) =>
+          : range(n).map((v) => v + 1).filter((v) =>
             unique.filter((u) => u.includes(i)).every((u) => u.every((j) => a[j] !== v))
           )
       );
@@ -169,7 +182,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
         );
       }
       for (const cells of units) {
-        for (const v of range(9).map((v) => v + 1)) {
+        for (const v of range(n).map((v) => v + 1)) {
           if (cells.some((i) => a[i] === v)) continue;
           const places = cells.filter((i) => candidates[i].includes(v));
           if (!places.length) {
@@ -472,31 +485,9 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
       break;
     }
     case "pipes": {
-      const domains = p.initial.map((mask, i) =>
-        [...new Set([mask, rotate(mask), rotate(rotate(mask)), rotate(rotate(rotate(mask)))])]
-          .filter((v) =>
-            [1, 2, 4, 8].every((bit) =>
-              !(v & bit) || adjacent(i, n).some((j) => direction(i, j, n) === bit)
-            )
-          )
-      );
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const i of all) {
-          const next = domains[i].filter((v) =>
-            adjacent(i, n).every((j) =>
-              domains[j].some((w) =>
-                Boolean(v & direction(i, j, n)) === Boolean(w & direction(j, i, n))
-              )
-            )
-          );
-          if (next.length !== domains[i].length) {
-            domains[i] = next;
-            changed = true;
-          }
-        }
-      }
+      const deductions = deducePipes(p.initial, n, p.difficulty ?? "hard");
+      if (!deductions.valid) break;
+      const domains = deductions.domains;
       const i = all.find((i) => domains[i].length === 1 && a[i] !== domains[i][0]);
       if (i !== undefined) {
         return put(
@@ -504,7 +495,7 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
           domains[i][0],
           `Rotate the pipe at ${
             at(i, n)
-          } to the shown orientation. Every other orientation forces an opening off the board or a mismatch with neighboring pipe shapes. This deduction uses pipe shapes, not your current rotations.`,
+          } to the shown orientation. This orientation is forced by the pipe shapes and the requirement to connect every tile without leaks. This deduction uses pipe shapes, not your current rotations.`,
           [i, ...adjacent(i, n)],
         );
       }
@@ -747,6 +738,19 @@ export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
       }
       break;
     }
+    case "galaxies": {
+      const result = solveGalaxies(p.centers ?? [], n, a, 2, 3000);
+      if (!result.exhausted && !result.solutions.length) return problem(
+        "These boundaries leave no way to make connected, rotationally symmetric galaxies. Undo or erase a boundary.", all);
+      for (let e = 0; e < p.edges.length; e++) {
+        if (a[e]) continue;
+        const [u, v] = p.edges[e];
+        if (result.domains[u].length && result.domains[v].length &&
+          !result.domains[u].some((g) => result.domains[v].includes(g))) return put(e, 1,
+            "Symmetry, circle ownership and connected paths rule out every shared galaxy for these two squares. Draw a boundary between them.", [u, v]);
+      }
+      break;
+    }
     case "fivecells": {
       for (const i of all.filter((i) => p.clues[i] >= 0)) {
         const edges = p.edges.flatMap(([u, v], e) => u === i || v === i ? [e] : []);
@@ -861,6 +865,7 @@ export function revealHint(p: Puzzle, a: number[]): Hint {
     }
   }
   const differs = (v: number, i: number) => {
+    if (p.kind === "battleships" && v === 2 && a[i] === 0) return false;
     if (p.kind === "akari" && v === 0 && a[i] === 2) return false;
     if (p.kind === "queens" && v === 0 && a[i] === 2) return false;
     if (p.kind === "mosaic" && v === 2 && a[i] === 0) return false;
@@ -869,15 +874,15 @@ export function revealHint(p: Puzzle, a: number[]): Hint {
   const i = p.solution.findIndex(differs);
   if (i >= 0) {
     const v = p.solution[i],
-      cells = p.kind === "atoms" || p.kind === "fivecells" ? p.edges[i] : [i];
+      cells = p.kind === "atoms" || p.kind === "fivecells" || p.kind === "galaxies" ? p.edges[i] : [i];
     const action = p.kind === "atoms"
       ? `Set the bond between these atoms to ${v} ${v === 1 ? "line" : "lines"}`
-      : p.kind === "fivecells"
+      : p.kind === "fivecells" || p.kind === "galaxies"
       ? `${v ? "Add" : "Remove"} the boundary between these squares`
       : p.kind === "pipes"
       ? `Rotate the highlighted pipe to match the revealed orientation`
       : `Set ${at(i, n)} to ${
-        p.kind === "sudoku" || p.kind === "killer"
+        p.kind === "mini" || p.kind === "sudoku" || p.kind === "killer"
           ? v
           : p.kind === "mambo"
           ? v === 1 ? "a circle" : "a diamond"
@@ -887,6 +892,8 @@ export function revealHint(p: Puzzle, a: number[]): Hint {
           ? v === 1 ? "a bulb" : "empty"
           : p.kind === "dosun"
           ? v === 1 ? "a white balloon" : v === 2 ? "a black weight" : "empty"
+          : p.kind === "battleships"
+          ? v === 1 ? "a ship" : "water"
           : p.kind === "nurikabe"
           ? v === 1 ? "water" : "land"
           : v === 1

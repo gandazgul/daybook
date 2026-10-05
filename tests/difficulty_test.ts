@@ -100,7 +100,7 @@ Deno.test("difficulty identities survive eviction and do not affect original boa
   );
   let rejected = false;
   try {
-    generate("pipes", "practice:unsupported", "hard");
+    generate("akari", "practice:unsupported", "hard");
   } catch {
     rejected = true;
   }
@@ -165,7 +165,7 @@ Deno.test("choices resume per day and practice retains its level without changin
   assert(restored.get("queens", "2026-09-14") === "hard");
   assert(restored.get("queens", "2026-09-15") === dailyDifficulty("queens", "2026-09-15"));
   assert(restored.get("queens", "practice:another") === "easy");
-  assert(restored.get("pipes", "2026-09-14") === undefined);
+  assert(restored.get("pipes", "2026-09-14") === "classic");
   const lateUpdate = new DifficultyChoices(disk(), (_kind, seed) => seed === "2026-09-20");
   assert(
     lateUpdate.get("queens", "2026-09-20") === "classic",

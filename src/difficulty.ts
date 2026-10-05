@@ -12,16 +12,17 @@ export const DIFFICULTY_LABELS: Record<DifficultyChoice, string> = {
   classic: "Original",
 };
 export const DAILY_DIFFICULTIES: Partial<Record<Kind, Difficulty>> = {
-  queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard", nurikabe: "medium",
+  battleships: "medium", galaxies: "medium", queens: "hard", mambo: "hard", sudoku: "easy", killer: "easy", snap: "hard", shikaku: "hard", nurikabe: "medium",
 };
 export function supportsDifficulty(kind: Kind) {
-  return DAILY_DIFFICULTIES[kind] !== undefined;
+  return kind === "pipes" || DAILY_DIFFICULTIES[kind] !== undefined;
 }
 export function isDifficulty(value: unknown): value is Difficulty {
   return DIFFICULTIES.includes(value as Difficulty);
 }
 export function dailyDifficulty(kind: Kind, date: string): Difficulty | undefined {
   if (!supportsDifficulty(kind)) return;
+  if (kind === "galaxies" || kind === "battleships") return "medium";
   if (kind === "shikaku" && date >= "2026-10-02") return DAILY_DIFFICULTIES.shikaku;
   if (kind === "nurikabe" && date >= "2026-10-03") return DAILY_DIFFICULTIES.nurikabe;
   if (kind === "nurikabe" && date >= "2026-10-02") return "hard";
@@ -30,6 +31,21 @@ export function dailyDifficulty(kind: Kind, date: string): Difficulty | undefine
 }
 export function difficultyDescription(kind: Kind, level: DifficultyChoice): string {
   if (level === "classic") return "The original daily board, with your existing progress.";
+  if (kind === "battleships") return {
+    easy: "6 × 6 · Easy: follow totals and revealed ship parts.",
+    medium: "6 × 6 · Hard: combine totals with the remaining fleet.",
+    hard: "8 × 8 · Hard: a larger fleet and more involved deductions.",
+  }[level];
+  if (kind === "galaxies") return {
+    easy: "5 × 5 · Hard puzzles on a smaller grid.",
+    medium: "7 × 7 · Normal puzzles, using symmetry and connections.",
+    hard: "7 × 7 · Hard puzzles, with trickier region deductions.",
+  }[level];
+  if (kind === "pipes") return {
+    easy: "5 × 5 · Follow edges and neighboring pipe shapes.",
+    medium: "7 × 7 · Work out how separate sections must connect.",
+    hard: "9 × 9 · Test rotations that would strand part of the network.",
+  }[level];
   if (kind === "nurikabe") return {
     easy: "5 × 5 · Small islands; at most one single-cell island.",
     medium: "7 × 7 · Larger islands; at most one single-cell island.",

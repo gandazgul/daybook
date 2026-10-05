@@ -1,3 +1,6 @@
+import { shipParts, type ShipPart } from "./battleships.ts";
+import { isSudoku, sudokuUnits } from "./mini-sudoku.ts";
+import { galaxyRegions, validGalaxyRegions } from "./galaxies.ts";
 import { ARCHIVE_START } from "./puzzle-archive.ts";
 import { AccessibleMenu, type MenuControl } from "./accessible-menu.ts";
 import { ScrollMomentum } from "./scroll.ts";
@@ -14,7 +17,7 @@ import Phaser from "phaser";
 import "./style.css";
 import { type Hint, revealHint, smartHint } from "./hints.ts";
 import { fiveRegions } from "./extra-puzzles.ts";
-import { cyclePaintCells, gridLine, pruneSudokuNotes, QueensInput } from "./input.ts";
+import { BattleshipsInput, cyclePaintCells, gridLine, pruneSudokuNotes, QueensInput } from "./input.ts";
 import { installDaybook, pwa, startPwa } from "./pwa.ts";
 import { type TutorialStep, tutorialSteps, TutorialStore } from "./tutorials.ts";
 import {
@@ -127,6 +130,8 @@ class Daybook extends Phaser.Scene {
   borderLastPoint?: { x: number; y: number };
   borderPaintValue = 1;
   queensInput = new QueensInput();
+  battleshipsInput = new BattleshipsInput();
+  battleshipsStroke = false;
   sudokuTap?: { index: number; time: number };
   sudokuPointerTime = 0;
   handledKeys = new WeakSet<KeyboardEvent>();
@@ -215,6 +220,7 @@ class Daybook extends Phaser.Scene {
       this.pointerStart = -1;
       if (this.page !== "game" || this.modal || this.progress?.completed) {
         this.queensInput.reset();
+    this.battleshipsInput.reset();
         this.sudokuTap = undefined;
         return;
       }
@@ -222,12 +228,16 @@ class Daybook extends Phaser.Scene {
       this.pointerStart = this.pointerLast = i;
       if (i < 0) {
         this.queensInput.reset();
+    this.battleshipsInput.reset();
         this.sudokuTap = undefined;
         return;
       }
       this.boardPointerId = p.id;
       this.sudokuPointerTime = performance.now();
-      if (this.puzzle!.kind === "fivecells") {
+      if (this.puzzle!.kind === "battleships") {
+        this.battleshipsInput.begin(i);
+        this.battleshipsStroke = false;
+      } else if (this.puzzle!.kind === "fivecells" || this.puzzle!.kind === "galaxies") {
         this.borderVisited.clear();
         this.borderLastPoint = undefined;
         this.paintFiveBorders((p.x / RENDER_SCALE), (p.y / RENDER_SCALE));
@@ -257,7 +267,7 @@ class Daybook extends Phaser.Scene {
         }
         return;
       }
-      if (this.puzzle?.kind === "fivecells" && !this.progress?.completed) {
+      if ((this.puzzle?.kind === "fivecells" || this.puzzle?.kind === "galaxies") && !this.progress?.completed) {
         this.pointerDragged = true;
         this.paintFiveBorders((p.x / RENDER_SCALE), (p.y / RENDER_SCALE));
         return;
@@ -265,7 +275,13 @@ class Daybook extends Phaser.Scene {
       const i = this.cellAt(p);
       if (i >= 0 && i !== this.pointerLast && !this.progress?.completed) {
         this.pointerDragged = true;
-        if (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") {
+        if (this.puzzle?.kind === "battleships") {
+          const marks = this.battleshipsInput.move(i, this.progress!.values, this.puzzle.initial, this.puzzle.size);
+          this.applyBattleshipsMarks(marks);
+          this.pointerLast = i;
+          return;
+        }
+        if (isSudoku(this.puzzle?.kind)) {
           this.extendSudokuSelection(i);
           return;
         }
@@ -313,10 +329,10 @@ class Daybook extends Phaser.Scene {
       if (this.page === "game" && !this.modal && !this.progress?.completed) {
         const i = this.cellAt(p);
         if (
-          (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") &&
+          isSudoku(this.puzzle?.kind) &&
           this.pointerStart >= 0 && i >= 0 && i !== this.pointerLast
         ) this.extendSudokuSelection(i);
-        if (this.puzzle?.kind === "sudoku" || this.puzzle?.kind === "killer") {
+        if (isSudoku(this.puzzle?.kind)) {
           const now = performance.now(), previous = this.sudokuTap;
           const tapped = i >= 0 && i === this.pointerStart && !this.pointerDragged &&
             this.selectedCells.size === 1 && now - this.sudokuPointerTime <= 400;
@@ -330,6 +346,11 @@ class Daybook extends Phaser.Scene {
           }
         }
         if (this.puzzle?.kind === "nurikabe" && this.pointerStart >= 0 && i >= 0) this.paintNurikabe(i);
+        if (this.puzzle?.kind === "battleships") {
+          if (i >= 0 && i !== this.pointerLast) this.applyBattleshipsMarks(this.battleshipsInput.move(i, this.progress!.values, this.puzzle.initial, this.puzzle.size));
+          const edit = this.battleshipsInput.end(i, this.progress!.values, this.puzzle.initial, performance.now());
+          this.applyBattleshipsMarks(edit.marks, edit.mergeUndo);
+        }
         if (this.puzzle?.kind === "queens") this.queensInput.end(i, performance.now());
         finishShikakuGesture(p, i);
       }
@@ -339,6 +360,7 @@ class Daybook extends Phaser.Scene {
       this.scrollMomentum.stop();
       this.pointerStart = this.boardPointerId = -1;
       this.queensInput.reset();
+    this.battleshipsInput.reset();
       this.sudokuTap = undefined;
     };
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => {
@@ -541,6 +563,7 @@ class Daybook extends Phaser.Scene {
       if (!this.pointerDragged) {
         this.focused = -1;
         this.queensInput.reset();
+    this.battleshipsInput.reset();
         action();
         this.touchFeedback((pointer.x / RENDER_SCALE), (pointer.y / RENDER_SCALE));
       }
@@ -610,6 +633,7 @@ class Daybook extends Phaser.Scene {
   }
   go(page: Page) {
     this.queensInput.reset();
+    this.battleshipsInput.reset();
     this.persist();
     this.page = page;
     this.settingsReturn = null;
@@ -951,7 +975,7 @@ class Daybook extends Phaser.Scene {
         this.box(x + i * s * .28, y + 5 + i * 4, s * .4, s * .65, this.C.panel, color, 4);
         this.circle(x + i * s * .28 + s * .2, y + 5 + i * 4 + s * .32, s * .06, color);
       }
-    } else if (kind === "sudoku" || kind === "killer") {
+    } else if (isSudoku(kind)) {
       g.strokeRoundedRect(x + 5, y + 2, s - 10, s - 3, 3);
       for (let k = 1; k < 3; k++) {
         g.lineBetween(x + 5 + k * (s - 10) / 3, y + 2, x + 5 + k * (s - 10) / 3, y + s - 1);
@@ -975,9 +999,18 @@ class Daybook extends Phaser.Scene {
         }
       } else {
         this.text(x + 13, y + 7, "3", 15, color);
-        this.text(x + 32, y + 27, "8", 15, color);
+        this.text(x + 32, y + 27, kind === "mini" ? "6" : "8", 15, color);
         this.text(x + 13, y + 46, "1", 15, color);
       }
+    } else if (kind === "battleships") {
+      for (const [row, length] of [[0, 3], [1, 2], [2, 1]]) for (let i = 0; i < length; i++)
+        this.shipPart(x + 10 + i * 17, y + 9 + row * 20, 16, length === 1 ? "single" : i === 0 ? "left" : i === length - 1 ? "right" : "middle", color);
+    } else if (kind === "galaxies") {
+      g.strokeRect(x + 3, y + 3, s - 6, s - 6);
+      g.lineBetween(x + s / 2, y + 3, x + s / 2, y + s - 3);
+      g.lineBetween(x + s / 2, y + s / 2, x + s - 3, y + s / 2);
+      [[.27, .5], [.73, .27], [.73, .73]].forEach(([a, b]) =>
+        this.circle(x + a * s, y + b * s, s * .075, this.C.panel, color));
     } else if (kind === "pipes") {
       g.lineStyle(10, color).beginPath().moveTo(x + 5, y + 45).lineTo(x + 22, y + 45).lineTo(
         x + 22,
@@ -1242,6 +1275,7 @@ class Daybook extends Phaser.Scene {
   }
   openGame(kind: Kind, seed: string, choice = difficultyChoices.get(kind, seed)) {
     this.queensInput.reset();
+    this.battleshipsInput.reset();
     this.sudokuTap = undefined;
     this.pointerStart = this.boardPointerId = -1;
     this.persist();
@@ -1291,6 +1325,7 @@ class Daybook extends Phaser.Scene {
     this.focused = -1;
     this.pointerStart = this.boardPointerId = -1;
     this.queensInput.reset();
+    this.battleshipsInput.reset();
     this.sudokuTap = undefined;
     this.touchPulses = [];
     this.draw();
@@ -1329,6 +1364,7 @@ class Daybook extends Phaser.Scene {
     this.pointerStart = this.boardPointerId = -1;
     this.rectStart = -1;
     this.queensInput.reset();
+    this.battleshipsInput.reset();
     this.sudokuTap = undefined;
     this.touchPulses = [];
     this.hint = mode === "smart" ? smartHint(this.puzzle, this.progress.values)
@@ -1349,8 +1385,8 @@ class Daybook extends Phaser.Scene {
     if (!this.hint?.values || !this.progress || this.modal !== "hint") return;
     this.snapshot();
     this.progress.values = [...this.hint.values];
-    if (this.puzzle!.kind === "sudoku" || this.puzzle!.kind === "killer") {
-      this.progress.notes = pruneSudokuNotes(this.progress.values, this.progress.notes, this.puzzle!.cages);
+    if (isSudoku(this.puzzle!.kind)) {
+      this.progress.notes = pruneSudokuNotes(this.progress.values, this.progress.notes, this.puzzle!.cages, this.puzzle!.size);
     }
     this.modal = null;
     this.hint = undefined;
@@ -1369,7 +1405,7 @@ class Daybook extends Phaser.Scene {
     }] : tutorialSteps(p);
     const step = steps[inHint ? 0 : this.tutorialPage];
     const n = step.boardExample?.size ?? step.example?.rows.length ?? p.size;
-    const legendHeight = steps.some((item) => item.example) ? 30 : 0;
+    const legendHeight = p.kind === "battleships" ? 36 : steps.some((item) => item.example) ? 30 : 0;
     const layout = this.puzzleLayout();
     const { m: left, w: width, headerTop, by: top } = layout;
     const margin = 16, gap = layout.compact ? layout.landscape ? 22 : 24 : layout.gap;
@@ -1397,7 +1433,7 @@ class Daybook extends Phaser.Scene {
     const cardY = wide ? layout.landscape && layout.compact
       ? top + 66 + (supportsDifficulty(p.kind) ? 44 : 0) : top : by + size + gap + legendHeight;
 
-    this.board = { x: bx, y: by, cell: size / n, n };
+    this.setPuzzleBoard(bx, by, size, n);
     // Render fixed examples through the same board renderer, restoring all player state synchronously.
     const selected = this.selected, selectedCells = this.selectedCells, progress = this.progress;
     this.selected = -1;
@@ -1429,13 +1465,13 @@ class Daybook extends Phaser.Scene {
       }
     } else {
     for (let i = 0; i < n ** 2; i++) {
-      const x = bx + i % n * s, y = by + Math.floor(i / n) * s;
+      const x = this.board.x + i % n * s, y = this.board.y + Math.floor(i / n) * s;
       if (!focus.has(i)) overlay.fillStyle(c.bg, .68).fillRect(x, y, s, s);
     }
     // Outline the highlighted area's perimeter; keep its symbols and clue numbers unobscured.
     overlay.lineStyle(2.5, highlight);
     for (const i of focus) {
-      const x = bx + i % n * s, y = by + Math.floor(i / n) * s;
+      const x = this.board.x + i % n * s, y = this.board.y + Math.floor(i / n) * s;
       if (!focus.has(i - n)) overlay.lineBetween(x, y, x + s, y);
       if (!focus.has(i + n)) overlay.lineBetween(x, y + s, x + s, y + s);
       if (i % n === 0 || !focus.has(i - 1)) overlay.lineBetween(x, y, x, y + s);
@@ -1443,19 +1479,20 @@ class Daybook extends Phaser.Scene {
     }
     }
     for (const [x1, y1, x2, y2] of step.lines || []) {
-      overlay.lineStyle(4, c.accent, .8).lineBetween(bx + x1 * s, by + y1 * s, bx + x2 * s, by + y2 * s);
+      overlay.lineStyle(4, c.accent, .8).lineBetween(this.board.x + x1 * s, this.board.y + y1 * s, this.board.x + x2 * s, this.board.y + y2 * s);
     }
     if (step.anchor !== undefined) {
       overlay.lineStyle(2, c.accent).strokeCircle(
-        bx + (step.anchor % n + .5) * s,
-        by + (Math.floor(step.anchor / n) + .5) * s,
+        this.board.x + (step.anchor % n + .5) * s,
+        this.board.y + (Math.floor(step.anchor / n) + .5) * s,
         s * .32,
       );
     }
     for (const [x, y, radius] of step.rings || []) {
-      overlay.lineStyle(2, c.accent).strokeCircle(bx + x * s, by + y * s, radius * s);
+      overlay.lineStyle(2, c.accent).strokeCircle(this.board.x + x * s, this.board.y + y * s, radius * s);
     }
-    if (legendHeight) {
+    if (p.kind === "battleships") this.drawFleet(bx, by + size + 7, size, step.boardExample?.fleet ?? p.fleet);
+    else if (legendHeight) {
       const legendWidth = wide ? boardSpace : width, legendX = wide ? left : (this.W - legendWidth) / 2;
       ["Land", "Water", "Blank"].forEach((label, index) => {
         const x = legendX + (index + .5) * legendWidth / 3 - 28, y = by + size + 14;
@@ -1509,8 +1546,8 @@ class Daybook extends Phaser.Scene {
   }
   puzzleLayout() {
     const compact = this.W < 760 || this.H < 480, landscape = this.W > this.H, short = this.H < 720;
-    const notePuzzle = this.puzzle!.kind === "sudoku" || this.puzzle!.kind === "killer";
-    const shapeLegend = this.puzzle!.kind === "shikaku" && this.puzzle!.shapes ? 30 : 0;
+    const notePuzzle = isSudoku(this.puzzle!.kind);
+    const shapeLegend = this.puzzle!.kind === "battleships" ? 36 : this.puzzle!.kind === "shikaku" && this.puzzle!.shapes ? 30 : 0;
     const m = compact ? this.mobile ? 12 : this.margin : Math.max(24, (this.W - 1120) / 2);
     const w = this.W - m * 2, headerTop = compact || short ? 8 : 19;
     const identityBy = compact ? landscape ? 76 : this.H < 700 ? 132 : 164 : short ? 166 : 196;
@@ -1522,7 +1559,7 @@ class Daybook extends Phaser.Scene {
       ? Math.min(this.H - by - 12, this.W * .48 - 20)
       : Math.min(this.W - 20, 480, this.H - by - footer)
       : Math.min(492, (w - gap) * .52, Math.max(120, this.H - by - footer));
-    const size = notePuzzle ? Math.floor(available / 9) * 9 : compact ? available : Math.round(available);
+    const size = notePuzzle ? Math.floor(available / this.puzzle!.size) * this.puzzle!.size : compact ? available : Math.round(available);
     const bx = compact && !landscape ? (this.W - size) / 2 : m;
     const titleX = compact && landscape ? bx + size + 22 : m;
     const titleWidth = this.W - m - titleX;
@@ -1585,17 +1622,17 @@ class Daybook extends Phaser.Scene {
   drawCompactGame() {
     const p = this.puzzle!, progress = this.progress!, c = this.C;
     const landscape = this.W > this.H;
-    const notePuzzle = p.kind === "sudoku" || p.kind === "killer";
+    const notePuzzle = isSudoku(p.kind);
     const practice = p.seed.startsWith("practice:");
     const layout = this.puzzleLayout();
     const { m, by, size, bx, titleX: ux, titleWidth: uw, titleY } = layout;
     this.scrollY = 0;
     this.drawPuzzleHeader(m, layout.headerTop);
-    this.board = { x: bx, y: by, cell: size / p.size, n: p.size };
+    this.setPuzzleBoard(bx, by, size, p.size);
     this.drawPuzzleIdentity(layout);
     this.drawBoard();
     const legendY = landscape ? titleY + 66 + (supportsDifficulty(p.kind) ? 44 : 0) : by + size + 10;
-    const controlsY = legendY + (p.kind === "shikaku" && p.shapes ? this.drawShikakuLegend(ux, legendY, uw) : 0);
+    const controlsY = legendY + (p.kind === "battleships" && !progress.completed ? this.drawFleet(ux, legendY, uw) : 0) + (p.kind === "shikaku" && p.shapes ? this.drawShikakuLegend(ux, legendY, uw) : 0);
     if (progress.completed) {
       this.text(ux, controlsY, `${META[p.kind].name} completed`, 18, c.accent);
       const remaining = kindsForDate(p.seed).find((kind) => !store.dailyProgress(p.seed, kind)?.completed);
@@ -1644,13 +1681,13 @@ class Daybook extends Phaser.Scene {
     const short = this.H < 720;
     const layout = this.puzzleLayout();
     const { m, by, size, bx, gap, buttonSize } = layout;
-    const notePuzzle = p.kind === "sudoku" || p.kind === "killer";
+    const notePuzzle = isSudoku(p.kind);
     this.drawPuzzleHeader(m, layout.headerTop);
     this.drawPuzzleIdentity(layout);
     const sx = bx + size + gap, sw = this.W - m - sx;
-    this.board = { x: bx, y: by, cell: size / p.size, n: p.size };
+    this.setPuzzleBoard(bx, by, size, p.size);
     this.drawBoard();
-    const bottom = by + size;
+    const bottom = by + size + (p.kind === "battleships" ? this.drawFleet(bx, by + size + 7, size) : 0);
     let sidebarBottom: number;
     if (progress.completed) {
       sidebarBottom = by + this.drawCompletion(sx, by, sw);
@@ -1693,8 +1730,8 @@ class Daybook extends Phaser.Scene {
     }
   }
   keypad(x: number, y: number, w: number, h: number) {
-    const gap = 5, bw = (w - gap * 9) / 10;
-    for (let v = 1; v <= 9; v++) {
+    const n = this.puzzle!.size, gap = 5, bw = (w - gap * n) / (n + 1);
+    for (let v = 1; v <= n; v++) {
       const bx = x + (v - 1) * (bw + gap);
       const digit = this.button(
         bx,
@@ -1710,12 +1747,12 @@ class Daybook extends Phaser.Scene {
       if (this.notes) {
         digit.setPosition(
           bx + bw / 2 + ((v - 1) % 3 - 1) * (bw - 16) / 2,
-          y + h / 2 + (Math.floor((v - 1) / 3) - 1) * (h - 20) / 2,
+          y + h / 2 + (Math.floor((v - 1) / 3) - (n / 3 - 1) / 2) * (h - 20) / (n / 3 - 1),
         );
       }
     }
     this.iconButton(
-      x + 9 * (bw + gap),
+      x + n * (bw + gap),
       y,
       bw,
       h,
@@ -1864,6 +1901,7 @@ class Daybook extends Phaser.Scene {
       this.add.graphics().setName("atoms-border").lineStyle(1, c.line).strokeRect(x, y, size, size);
       return;
     }
+    if (p.kind === "battleships") { this.drawBattleships(); return; }
     if (p.kind === "akari") {
       this.drawAkari();
       return;
@@ -1874,7 +1912,12 @@ class Daybook extends Phaser.Scene {
     const activeRegion = p.kind === "shikaku" && this.selected >= 0
       ? rectangle(this.pointerStart >= 0 ? this.pointerStart : this.selected, this.selected, n)
       : [];
-    const partitions = p.kind === "fivecells" ? fiveRegions(p.edges, a, n) : [];
+    const partitions = p.kind === "galaxies" ? galaxyRegions(p.edges, a, n)
+      : p.kind === "fivecells" ? fiveRegions(p.edges, a, n) : [];
+    const validGalaxies = p.kind === "galaxies" ? new Set(validGalaxyRegions(p.centers ?? [], partitions, n)) : new Set<number>();
+    if (p.kind === "galaxies") p.edges.forEach(([u, v], e) => {
+      if (a[e] === 1 && partitions[u] === partitions[v]) validGalaxies.delete(partitions[u]);
+    });
     const balanceErrors = p.kind === "mambo" ? balanceConflicts(a, n, p.links) : [];
     const balanceErrorCells = new Set(balanceErrors.flatMap(({ cells }) => cells));
     const partitionSizes = new Map<number, number>();
@@ -1888,8 +1931,9 @@ class Daybook extends Phaser.Scene {
       if (p.kind === "fivecells" && partitionSizes.get(partitions[i]) === 5) {
         fill = regions[partitions[i] % regions.length];
       }
+      if (p.kind === "galaxies" && validGalaxies.has(partitions[i])) fill = regions[partitions[i] % regions.length];
       if (p.kind === "shikaku" && a[i]) fill = regions[(a[i] - 1) % regions.length];
-      if (p.kind === "sudoku" || p.kind === "killer") {
+      if (isSudoku(p.kind)) {
         if (
           this.selected >= 0 &&
           ((i / n | 0) === (this.selected / n | 0) || i % n === this.selected % n)
@@ -1898,7 +1942,7 @@ class Daybook extends Phaser.Scene {
       }
       if (
         (this.selected === i && p.kind !== "snap") || activeRegion.includes(i) ||
-        ((p.kind === "sudoku" || p.kind === "killer") && this.selectedCells.has(i))
+        (isSudoku(p.kind) && this.selectedCells.has(i))
       ) {
         fill = blend(fill, c.accent, .17);
       }
@@ -1950,7 +1994,7 @@ class Daybook extends Phaser.Scene {
         if (p.clues[i] >= 0) {
           this.text(xx + s / 2, yy + s / 2, String(p.clues[i]), s * .38, c.ink).setOrigin(.5);
         }
-      } else if (p.kind === "sudoku" || p.kind === "killer") {
+      } else if (isSudoku(p.kind)) {
         if (a[i]) {
           const fixed = p.initial[i] > 0, conflict = this.numberConflict(i);
           this.text(
@@ -1965,7 +2009,7 @@ class Daybook extends Phaser.Scene {
           // Reserve the sum-clue corner in every Killer cell so all note grids align.
           const noteTop = p.kind === "killer" ? 1 + s * .26 : notePad;
           const noteHeight = s - noteTop - notePad;
-          const slotWidth = (s - notePad * 2) / 3, slotHeight = noteHeight / 3;
+          const slotWidth = (s - notePad * 2) / 3, slotHeight = noteHeight / (n / 3);
           for (const v of state.notes[i] || []) {
             const note = this.text(
               xx + notePad + ((v - 1) % 3 + .5) * slotWidth,
@@ -2013,7 +2057,7 @@ class Daybook extends Phaser.Scene {
         if (fixed) this.circle(xx + s - 8, yy + s - 8, 2.2, c.muted);
       }
     }
-    const sudokuGrid = p.kind === "sudoku" || p.kind === "killer";
+    const sudokuGrid = isSudoku(p.kind);
     const grid = this.add.graphics().lineStyle(1, sudokuGrid ? blend(c.line, c.ink, .2) : c.line);
     for (let i = 0; i <= n; i++) {
       // Individual Sudoku cells use spacing; only the 3 × 3 boxes have borders.
@@ -2027,13 +2071,16 @@ class Daybook extends Phaser.Scene {
       for (let i = 0; i <= n; i++) {
         const gap = i % 3 === 0 ? 4 : 2;
         gaps.fillRect(x + i * s - gap / 2, y, gap, size);
-        gaps.fillRect(x, y + i * s - gap / 2, size, gap);
+        const rowGap = i % (n === 6 ? 2 : 3) === 0 ? 4 : 2;
+        gaps.fillRect(x, y + i * s - rowGap / 2, size, rowGap);
       }
       const boxBorders = this.add.graphics().lineStyle(2, 0x000000);
       boxBorders.strokeRect(x, y, size, size);
       boxBorders.lineStyle(p.kind === "killer" ? 3 : 2, 0x000000);
       for (let i = 3; i < n; i += 3) {
         boxBorders.lineBetween(x + i * s, y, x + i * s, y + size);
+      }
+      for (let i = n === 6 ? 2 : 3; i < n; i += n === 6 ? 2 : 3) {
         boxBorders.lineBetween(x, y + i * s, x + size, y + i * s);
       }
       // Cages may span boxes; keep their dashed outlines continuous across the spacing.
@@ -2054,7 +2101,7 @@ class Daybook extends Phaser.Scene {
         grid.lineStyle(3, c.accent).strokeRect(xx + 2, yy + 2, s - 4, s - 4);
       }
     }
-    if (p.kind === "fivecells") {
+    if (p.kind === "fivecells" || p.kind === "galaxies") {
       const walls = this.add.graphics().lineStyle(3, c.accent);
       walls.strokeRect(x, y, size, size);
       p.edges.forEach((_, e) => {
@@ -2062,6 +2109,11 @@ class Daybook extends Phaser.Scene {
         const edge = this.fiveEdgeSegment(e);
         walls.lineBetween(edge.x1, edge.y1, edge.x2, edge.y2);
       });
+      if (p.kind === "galaxies") {
+        for (const [cx, cy] of p.centers ?? []) {
+          this.circle(x + (cx / 2 + .5) * s, y + (cy / 2 + .5) * s, Math.max(4, s * .105), c.panel, c.ink);
+        }
+      }
     }
     if (p.kind === "pipes") this.drawPipes();
     if (p.kind === "snap") this.drawNumberPath();
@@ -2080,7 +2132,7 @@ class Daybook extends Phaser.Scene {
       }
     }
     if (this.selected >= 0 && p.kind !== "fivecells") {
-      const selection = (p.kind === "sudoku" || p.kind === "killer") && this.selectedCells.size
+      const selection = isSudoku(p.kind) && this.selectedCells.size
         ? this.selectedCells
         : [this.selected];
       const outline = this.add.graphics().lineStyle(2, c.accent);
@@ -2093,12 +2145,7 @@ class Daybook extends Phaser.Scene {
   numberConflict(i: number) {
     const p = this.puzzle!, a = this.progress!.values, v = a[i];
     if (!v) return false;
-    const r = i / 9 | 0, c = i % 9;
-    return a.some((n, j) =>
-      i !== j && n === v &&
-      ((j / 9 | 0) === r || j % 9 === c ||
-        ((j / 27 | 0) === (r / 3 | 0) && (j % 9 / 3 | 0) === (c / 3 | 0)))
-    ) || p.cages.some((g) =>
+    return sudokuUnits(p.size).filter((u) => u.includes(i)).some((u) => u.some((j) => j !== i && a[j] === v)) || p.cages.some((g) =>
       g.cells.includes(i) && (g.cells.some((j) =>
         j !== i && a[j] === v
       ) || g.cells.reduce((sum, j) =>
@@ -2358,6 +2405,64 @@ class Daybook extends Phaser.Scene {
     this.persist();
     this.draw();
   }
+  applyBattleshipsMarks(marks: { index: number; value: number }[], mergeUndo = false) {
+    if (!marks.length) return;
+    if (!this.battleshipsStroke && !mergeUndo) this.snapshot();
+    this.battleshipsStroke = true;
+    marks.forEach(({index, value}) => this.progress!.values[index] = value);
+    this.selected = marks.at(-1)!.index;
+    this.changed();
+    marks.forEach(({index}) => this.cellFeedback(index));
+  }
+  setPuzzleBoard(x: number, y: number, size: number, n: number) {
+    const inset = this.puzzle?.kind === "battleships" ? .7 : 0;
+    const cell = size / (n + inset);
+    this.board = { x: x + inset * cell, y: y + inset * cell, cell, n };
+  }
+  shipPart(x: number, y: number, size: number, part: ShipPart, color: number) {
+    const g = this.add.graphics().fillStyle(color), d = size * .66, r = d / 2;
+    if (part === "single") { g.fillCircle(x, y, r); return; }
+    const radii = {tl: 0, tr: 0, bl: 0, br: 0};
+    if (part === "top" || part === "left") radii.tl = r;
+    if (part === "top" || part === "right") radii.tr = r;
+    if (part === "bottom" || part === "left") radii.bl = r;
+    if (part === "bottom" || part === "right") radii.br = r;
+    g.fillRoundedRect(x - r, y - r, d, d, radii);
+  }
+  drawFleet(x: number, y: number, width: number, data = this.puzzle?.fleet) {
+    if (!data) return 0;
+    const lengths = [...new Set(data.fleet)].sort((a,b)=>b-a), slot = (width - 42) / lengths.length;
+    this.text(x, y + 10, "Fleet", 12, this.C.muted).setOrigin(0,.5);
+    lengths.forEach((length, k) => {
+      const left = x + 42 + k * slot, unit = Math.min(10, (slot - 23) / length);
+      for (let i = 0; i < length; i++) this.shipPart(left + unit * (i + .5), y + 10, unit * 1.2,
+        length === 1 ? "single" : i === 0 ? "left" : i === length - 1 ? "right" : "middle", this.C.ink);
+      this.text(left + unit * length + 3, y + 10, `×${data.fleet.filter((v)=>v===length).length}`, 12, this.C.ink).setOrigin(0,.5);
+    });
+    return 36;
+  }
+  drawBattleships() {
+    const p = this.puzzle!, a = this.progress!.values, c = this.C;
+    const {x,y,cell:s,n} = this.board, parts = shipParts(a,n), data = p.fleet!;
+    for (let i=0;i<n*n;i++) {
+      const xx=x+i%n*s, yy=y+Math.floor(i/n)*s, fixed=!!p.initial[i];
+      this.box(xx,yy,s,s, this.selected === i ? c.soft : c.panel,c.line,0);
+      if (a[i]===1) this.shipPart(xx+s/2,yy+s/2,s, fixed ? data.parts[i] || "ship" : parts[i],fixed?c.ink:this.tint("battleships"));
+      if (a[i]===2) {
+        const g=this.add.graphics().lineStyle(Math.max(1.5,s*.03),fixed?c.ink:c.muted);
+        g.lineBetween(xx+s*.37,yy+s*.37,xx+s*.63,yy+s*.63).lineBetween(xx+s*.63,yy+s*.37,xx+s*.37,yy+s*.63);
+      }
+      if(fixed)this.circle(xx+s-4,yy+s-4,1.7,c.muted);
+    }
+    for(const [axis,counts] of [data.rows,data.columns].entries()) counts.forEach((target,line)=>{
+      const cells=Array.from({length:n},(_,k)=>axis?k*n+line:line*n+k);
+      const used=cells.filter((i)=>a[i]===1).length,unknown=cells.filter((i)=>!a[i]).length;
+      const color=used>target||used+unknown<target?c.error:used===target?c.accent:c.ink;
+      this.text(axis?x+(line+.5)*s:x-s*.4,axis?y-s*.4:y+(line+.5)*s,String(target),Math.min(22,s*.43),color).setOrigin(.5);
+    });
+    if(this.selected>=0){const xx=x+this.selected%n*s,yy=y+Math.floor(this.selected/n)*s;
+      this.add.graphics().lineStyle(2,c.accent).strokeRect(xx+1,yy+1,s-2,s-2);}
+  }
   paintNurikabe(index: number) {
     const p = this.puzzle!, values = this.progress!.values;
     const first = !this.nurikabeVisited.size;
@@ -2380,7 +2485,8 @@ class Daybook extends Phaser.Scene {
       return;
     }
     if (
-      p.kind === "fivecells" || (p.kind === "dosun" && p.regions[i] < 0) ||
+      p.kind === "fivecells" || p.kind === "galaxies" || (p.kind === "dosun" && p.regions[i] < 0) ||
+      (p.kind === "battleships" && p.initial[i] > 0) ||
       (p.kind === "nurikabe" && p.clues[i] > 0) ||
       (p.kind === "mosaic" && p.initial[i] > 0) ||
       (p.kind === "akari" && p.clues[i] !== AKARI_WHITE)
@@ -2388,12 +2494,12 @@ class Daybook extends Phaser.Scene {
       this.draw();
       return;
     }
-    if (p.kind === "sudoku" || p.kind === "killer") {
+    if (isSudoku(p.kind)) {
       this.selectedCells = new Set([i]);
       this.updateSudokuNotes();
       this.draw();
       this.announce(
-        `Row ${1 + (i / 9 | 0)}, column ${i % 9 + 1}, ${a[i] || "empty"}${
+        `Row ${1 + (i / p.size | 0)}, column ${i % p.size + 1}, ${a[i] || "empty"}${
           p.initial[i] ? ", fixed" : ""
         }`,
       );
@@ -2471,7 +2577,7 @@ class Daybook extends Phaser.Scene {
       return;
     }
     this.snapshot();
-    a[i] = p.kind === "pipes" ? rotate(a[i]) : (a[i] + 1) % 3;
+    a[i] = p.kind === "pipes" ? rotate(a[i]) : p.kind === "battleships" ? a[i] === 0 ? 2 : a[i] === 2 ? 1 : 0 : (a[i] + 1) % 3;
     this.changed();
   }
   placeRectangle(a: number, b: number) {
@@ -2535,7 +2641,7 @@ class Daybook extends Phaser.Scene {
     this.announce(`${this.selectedCells.size} squares selected. Notes on.`);
   }
   updateSudokuNotes() {
-    if (this.puzzle?.kind !== "sudoku" && this.puzzle?.kind !== "killer") return;
+    if (!isSudoku(this.puzzle?.kind)) return;
     if (this.selectedCells.size > 1 && !this.notes) {
       this.notes = this.temporaryNotes = true;
     } else if (this.selectedCells.size <= 1 && this.temporaryNotes) {
@@ -2551,14 +2657,14 @@ class Daybook extends Phaser.Scene {
     }
   }
   sudokuDigitDone(v: number) {
-    return v > 0 && (this.progress?.values.filter((value) => value === v).length ?? 0) >= 9;
+    return v > 0 && (this.progress?.values.filter((value) => value === v).length ?? 0) >= (this.puzzle?.size ?? 9);
   }
   enterNumber(v: number, asAnswer = false) {
     if (
       this.selected < 0 || !this.progress || this.progress.completed || this.modal || !this.puzzle
     ) return;
-    if (this.puzzle.kind !== "sudoku" && this.puzzle.kind !== "killer") return;
-    if (this.sudokuDigitDone(v)) return;
+    if (!isSudoku(this.puzzle.kind)) return;
+    if (!Number.isInteger(v) || v < 0 || v > this.puzzle.size || this.sudokuDigitDone(v)) return;
     const bulkNotes = this.notes && !asAnswer && v !== 0 && this.selectedCells.size > 1;
     const cells = [...(this.selectedCells.size ? this.selectedCells : [this.selected])]
       .filter((i) => !this.puzzle!.initial[i] && (!bulkNotes || !this.progress!.values[i]));
@@ -2583,6 +2689,7 @@ class Daybook extends Phaser.Scene {
           this.progress.values,
           this.progress.notes,
           this.puzzle.kind === "killer" ? this.puzzle.cages : [],
+          this.puzzle.size,
         );
       }
     }
@@ -2618,6 +2725,7 @@ class Daybook extends Phaser.Scene {
     if (this.handledKeys.has(e)) return;
     this.handledKeys.add(e);
     this.queensInput.reset();
+    this.battleshipsInput.reset();
     this.sudokuTap = undefined;
     if (e.key === "Tab") {
       e.preventDefault();
@@ -2700,7 +2808,7 @@ class Daybook extends Phaser.Scene {
       e.preventDefault();
       this.focused = -1;
       const old = this.selected < 0 ? 0 : this.selected, target = old + arrows[e.key];
-      if ((this.puzzle.kind === "atoms" || this.puzzle.kind === "fivecells") && e.shiftKey) {
+      if ((this.puzzle.kind === "atoms" || this.puzzle.kind === "fivecells" || this.puzzle.kind === "galaxies") && e.shiftKey) {
         const edge = this.puzzle.edges.findIndex(([a, b]) =>
           (a === old && b === target) || (b === old && a === target)
         );

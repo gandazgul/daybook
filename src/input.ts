@@ -1,3 +1,4 @@
+import { sudokuUnits } from "./mini-sudoku.ts";
 import type { Cage } from "./puzzles.ts";
 
 /** Remove pencil marks ruled out by entries, without changing the supplied undo state. */
@@ -5,20 +6,13 @@ export function pruneSudokuNotes(
   values: number[],
   notes: Record<number, number[]>,
   cages: Cage[] = [],
+  size = 9,
 ): Record<number, number[]> {
   const result: Record<number, number[]> = {};
   for (const [key, candidates] of Object.entries(notes)) {
     const i = Number(key);
     if (values[i]) continue;
-    const row = Math.floor(i / 9), col = i % 9;
-    const blocked = new Set<number>();
-    for (let offset = 0; offset < 9; offset++) {
-      blocked.add(values[row * 9 + offset]);
-      blocked.add(values[offset * 9 + col]);
-      const boxRow = Math.floor(row / 3) * 3 + Math.floor(offset / 3);
-      const boxCol = Math.floor(col / 3) * 3 + offset % 3;
-      blocked.add(values[boxRow * 9 + boxCol]);
-    }
+    const blocked = new Set<number>(sudokuUnits(size).filter((u) => u.includes(i)).flat().map((j) => values[j]));
     for (const cage of cages) {
       if (cage.cells.includes(i)) cage.cells.forEach((cell) => blocked.add(values[cell]));
     }
@@ -128,4 +122,43 @@ export class QueensInput {
     this.start = this.last = -1;
     this.visited.clear();
   }
+}
+
+/** Battleships taps cycle blank → water → ship; drags paint water and preserve ships. */
+export class BattleshipsInput {
+  private start = -1;
+  private last = -1;
+  private dragged = false;
+  private visited = new Set<number>();
+  private lastTap?: { index: number; time: number };
+  begin(index: number) {
+    this.start = this.last = index;
+    this.dragged = false;
+    this.visited.clear();
+  }
+  move(index: number, values: number[], fixed: number[], size: number): Mark[] {
+    if (this.start < 0 || index === this.last) return [];
+    this.dragged = true;
+    this.lastTap = undefined;
+    const marks: Mark[] = [];
+    for (const i of gridLine(this.last, index, size)) {
+      if (this.visited.has(i)) continue;
+      this.visited.add(i);
+      if (!fixed[i] && values[i] !== 1 && values[i] !== 2) marks.push({index:i,value:2});
+    }
+    this.last = index;
+    return marks;
+  }
+  end(index: number, values: number[], fixed: number[], time: number) {
+    const result = {marks: [] as Mark[], mergeUndo: false};
+    if (this.start >= 0 && index === this.start && !this.dragged && !fixed[index]) {
+      const double = this.lastTap?.index === index && time - this.lastTap.time <= 320;
+      result.marks.push({index,value:double ? 1 : values[index] === 0 ? 2 : values[index] === 2 ? 1 : 0});
+      result.mergeUndo = !!double;
+      this.lastTap = double ? undefined : {index,time};
+    } else this.lastTap = undefined;
+    this.start = this.last = -1;
+    return result;
+  }
+  reset() { this.start = this.last = -1; this.lastTap = undefined; this.visited.clear(); }
 }

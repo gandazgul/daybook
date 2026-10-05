@@ -176,7 +176,7 @@ Deno.test("Akari saves and hints preserve walls, optional notes, time and determ
 });
 Deno.test("Akari replaces Five Cells from September 14; Mosaic and Five Cells remain in practice", () => {
   assert(
-    KINDS.length === 14 && KINDS.includes("mosaic") && KINDS.includes("fivecells") &&
+    KINDS.length === 17 && KINDS.includes("mosaic") && KINDS.includes("fivecells") &&
       KINDS.includes("akari"),
   );
   const before = kindsForDate("2026-09-13"), after = kindsForDate(AKARI_START);

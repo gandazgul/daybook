@@ -42,10 +42,13 @@ export interface TutorialStep {
 // Tutorials can inspect visible clues and geometry, never the solution or the player's answers.
 type VisiblePuzzle = Pick<
   Puzzle,
-  "kind" | "size" | "initial" | "clues" | "regions" | "cages" | "links" | "edges" | "shapes"
+  "kind" | "size" | "initial" | "clues" | "regions" | "cages" | "links" | "edges" | "shapes" | "centers" | "fleet"
 >;
 
 const finishedGoals: Record<Exclude<Kind, "nurikabe">, string> = {
+  battleships: "The fleet is complete. Every row and column total matches, ships are straight, and no ships touch, even at corners.",
+  mini: "Every row, column and 2 × 3 box contains 1–6 exactly once.",
+  galaxies: "Every connected region contains one circle and matches itself after a half-turn around that circle.",
   sudoku:
     "Every square is filled. Each row, column and outlined 3 × 3 box contains 1–9 exactly once.",
   killer:
@@ -207,6 +210,28 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
     }
     case "sets":
       return [];
+    case "mini":
+      return [...sudoku, ...sudokuControls].map((step) => ({...step,
+        text: step.text.replaceAll("1–9", "1–6").replaceAll("3 × 3", "2 × 3").replaceAll("nine copies", "six copies"),
+        cells: step.title === "Every box" ? all.filter((i) => Math.floor(i / n) < 2 && i % n < 3) : step.cells,
+      }));
+    case "battleships":
+      return [
+        step("Count ship squares", "The numbers above and beside the grid count ship squares in each column and row. A zero means the whole line is water."),
+        step("Find the whole fleet", "The fleet below the grid shows each ship length and how many you need. For example, three joined blocks ×1 means one ship of length three. Ships run straight across or down."),
+        step("Leave water between ships", "Different ships cannot touch, even at corners. Once you find a ship square, its diagonal neighbors must be water."),
+        step("Read revealed ship parts", "Starting clues are fixed and have a small corner dot. A round ship clue is a submarine. A rounded end has the rest of its ship on its flat side. A square middle clue continues on two opposite sides."),
+        step("Paint water", "Drag across the grid to paint water. The stroke preserves ships and fixed clues, and Undo reverses the whole stroke. Tap a blank cell to mark just that square as water."),
+        step("Place a ship", "Tap a water cell to turn it into a ship. Double-click or double-tap any editable cell to place a ship directly. Tap a ship once to clear it. With a keyboard, use arrows and Space."),
+      ];
+    case "galaxies":
+      return [
+        step("One circle per galaxy", "Divide the whole grid into connected regions with exactly one circle in each. No square can be left outside a galaxy."),
+        step("A half-turn", "Imagine rotating a galaxy 180° around its circle. Each square must land on another square in the same galaxy. The shape can be irregular."),
+        step("Circles on edges and corners", "A circle inside a cell owns that cell. A circle on an edge owns both touching cells; a circle at a corner owns all four. A boundary cannot cut through a circle."),
+        step("Draw and erase boundaries", "Tap between squares or drag along grid lines to draw boundaries. Start on a boundary to erase it. Undo restores a whole stroke. Valid closed galaxies turn colored."),
+        step("Keyboard boundaries", "Use arrows to select a square, then Shift + an arrow to toggle a boundary on that side. Hints can explain a boundary or reveal one move."),
+      ];
     case "sudoku":
       return [...sudoku, ...sudokuControls];
     case "killer": {

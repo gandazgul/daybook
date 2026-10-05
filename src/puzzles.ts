@@ -1,8 +1,13 @@
+import { generateBattleships, BATTLESHIP_SIZES, validBattleships, type FleetClues } from "./battleships.ts";
+import { countMiniSudoku, generateMiniSudoku } from "./mini-sudoku.ts";
+import { generateGalaxies, GALAXY_SIZES, validGalaxies, type GalaxyCenter } from "./galaxies.ts";
 import { countShikaku, shikakuOptions, shikakuRectangleError, type ShikakuShape } from "./shikaku.ts";
 export { countShikaku, shikakuOptions } from "./shikaku.ts";
 import { SHIKAKU_SIZES } from "./shikaku.ts";
 import { generateShapeShikaku } from "./shikaku-difficulty.ts";
 import { generateLargerNurikabe, NURIKABE_SIZES } from "./nurikabe-difficulty.ts";
+import { generateRatedPipes } from "./pipes-difficulty.ts";
+import { PIPES_SIZES } from "./pipes-logic.ts";
 import { archivedPuzzle } from "./puzzle-archive.ts";
 import { findSets, generateSets } from "./sets.ts";
 import { generateAkari, validAkari } from "./akari.ts";
@@ -21,6 +26,9 @@ import {
 export const GENERATOR_VERSION = 1;
 // These persisted identifiers also seed generation; keep them stable when display names change.
 export type Kind =
+  | "battleships"
+  | "mini"
+  | "galaxies"
   | "sudoku"
   | "pipes"
   | "atoms"
@@ -49,14 +57,20 @@ export const KINDS: readonly Kind[] = [
   "akari",
   "fivecells",
   "mosaic",
+  "battleships",
+  "galaxies",
+  "mini",
   "sudoku",
   "killer",
 ] as const;
 export const EXTRA_GAMES_START = "2026-09-09";
 export const AKARI_START = "2026-09-14";
+export const MINI_GALAXIES_START = "2026-10-04";
 export function kindsForDate(date: string): readonly Kind[] {
   return KINDS.filter((kind) =>
     kind !== "mosaic" &&
+    (kind !== "sudoku" || date < MINI_GALAXIES_START) &&
+    (!["mini", "galaxies", "battleships"].includes(kind) || date >= MINI_GALAXIES_START) &&
     (kind !== "akari" || date >= AKARI_START) &&
     (kind !== "fivecells" || date < AKARI_START) &&
     (kind !== "sets" || date >= "2026-09-11") &&
@@ -74,6 +88,42 @@ export const META: Record<
     pale: number;
   }
 > = {
+  battleships: {
+    name: "Battleships", category: "FIND THE FLEET",
+    description: "Find the hidden fleet using the row and column totals.",
+    rules: [
+      "Find every ship in the fleet shown below the grid. Ships are straight lines of connected squares.",
+      "Ships cannot touch each other, even diagonally. Numbers outside the grid count ship squares in each row or column.",
+      "Revealed ship parts and water are fixed. A round part is a submarine; a rounded end points away from the rest of its ship.",
+      "Drag across the grid to paint water. Existing ships and fixed clues stay in place.",
+      "Tap a blank cell for water; tap water to place a ship; tap a ship to clear it. Double-click or double-tap places a ship directly.",
+      "Keyboard: arrows select, Space cycles blank → water → ship → blank. Marking every water square is optional.",
+    ], color: 0x49777b, pale: 0xe6efed,
+  },
+  mini: {
+    name: "Mini Sudoku", category: "SIX OF EACH",
+    description: "Fill each row, column and 2 × 3 box with 1–6.",
+    rules: [
+      "Fill every row, column, and 2 × 3 box with 1–6, using each digit exactly once.",
+      "Starting clues are fixed. Select an empty cell, then tap a digit or press 1–6.",
+      "N toggles notes. Drag across cells to add notes to several empty cells.",
+      "Placing a digit removes conflicting notes in its row, column, and box. Undo restores them.",
+      "Double-tap a cell with one note to fill it. Digits disable after six copies are placed.",
+      "Backspace or the eraser clears selected entries.",
+    ], color: 0x566b51, pale: 0xe9eee3,
+  },
+  galaxies: {
+    name: "Galaxies", category: "A TURN OF SYMMETRY",
+    description: "Divide the grid into rotationally symmetric galaxies.",
+    rules: [
+      "Divide the whole grid into connected regions, each containing exactly one circle.",
+      "Each region must look identical after a half-turn (180°) around its circle.",
+      "A circle can sit in a cell, on an edge, or at a corner. All cells touching it belong to its galaxy.",
+      "Tap or drag along grid lines to draw boundaries. Start on a boundary to erase it.",
+      "Closed galaxies turn colored when they satisfy the rules. No extra boundaries inside a galaxy.",
+      "Keyboard: arrows select a square; Shift + an arrow toggles the boundary on that side.",
+    ], color: 0x807198, pale: 0xede8f2,
+  },
   sudoku: {
     name: "Sudoku",
     category: "THE CLASSIC",
@@ -326,6 +376,8 @@ export interface Puzzle {
   kind: Kind;
   difficulty?: Difficulty;
   shapes?: ShikakuShape[];
+  centers?: GalaxyCenter[];
+  fleet?: FleetClues;
   size: number;
   seed: string;
   initial: number[];
@@ -865,7 +917,10 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   }
   const level = difficulty ?? DAILY_DIFFICULTIES[kind];
   const rng = new Random(key),
-    size = kind === "shikaku" && difficulty ? SHIKAKU_SIZES[difficulty]
+    size = kind === "battleships" ? BATTLESHIP_SIZES[level!]
+      : kind === "galaxies" ? GALAXY_SIZES[level!]
+      : kind === "shikaku" && difficulty ? SHIKAKU_SIZES[difficulty]
+      : kind === "pipes" && difficulty ? PIPES_SIZES[difficulty]
       : kind === "nurikabe" && difficulty ? NURIKABE_SIZES[difficulty]
       : kind === "snap" && level !== "easy" ? 7
       : kind === "queens" ? QUEENS_SIZES[level!] : kind === "sudoku" || kind === "killer"
@@ -878,6 +933,15 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
   const p = blank(kind, seed, size);
   if (difficulty) p.difficulty = difficulty;
   switch (kind) {
+    case "battleships":
+      generateBattleships(p, rng, level!);
+      break;
+    case "mini":
+      generateMiniSudoku(p, rng);
+      break;
+    case "galaxies":
+      generateGalaxies(p, rng, level!);
+      break;
     case "sudoku":
     case "killer":
       generateRatedNumberPuzzle(p, rng, level!);
@@ -886,7 +950,8 @@ export function generate(kind: Kind, seed: string, difficulty?: Difficulty): Puz
       generateRatedQueens(p, rng, level!);
       break;
     case "pipes":
-      pipes(p, rng);
+      if (difficulty) generateRatedPipes(p, rng, difficulty);
+      else pipes(p, rng);
       break;
     case "atoms":
       atoms(p, rng);
@@ -942,10 +1007,16 @@ export function isSolved(p: Puzzle, a: number[]): boolean {
   const n = p.size;
   if (p.kind !== "snap" && a.length !== p.initial.length) return false;
   if (
-    (p.kind === "sudoku" || p.kind === "killer" || p.kind === "mambo" || p.kind === "mosaic") &&
+    (p.kind === "mini" || p.kind === "sudoku" || p.kind === "killer" || p.kind === "mambo" || p.kind === "mosaic") &&
     p.initial.some((v, i) => v && a[i] !== v)
   ) return false;
   switch (p.kind) {
+    case "battleships":
+      return !!p.fleet && p.initial.every((v, i) => !v || a[i] === v) && validBattleships(p.fleet, a, n);
+    case "mini":
+      return a.every((v) => v >= 1 && v <= 6) && countMiniSudoku(a, 1) === 1;
+    case "galaxies":
+      return validGalaxies(p.centers ?? [], p.edges, a, n);
     case "sets":
       return a.length === 3 && a.every((v) => v === 1) && p.clues.length === 8 &&
         new Set(p.clues).size === 8 && findSets(p.clues).length === 3;
