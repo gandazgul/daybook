@@ -7,12 +7,14 @@ import {
   type Puzzle,
 } from "./puzzles.ts";
 import { DIFFICULTIES, type Difficulty, supportsDifficulty } from "./difficulty.ts";
+import { autoWater } from "./battleships-assist.ts";
 export interface Progress {
   values: number[];
   notes: Record<number, number[]>;
   elapsed: number;
   completed: boolean;
   completedAt?: string;
+  autoWater?: number[];
 }
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -78,9 +80,14 @@ export class ProgressStore {
         });
       }
       saved.completed = isSolved(puzzle, saved.values);
+      if (puzzle.kind === "battleships") {
+        const previous = Array.isArray(saved.autoWater) ? saved.autoWater.filter((i) => Number.isInteger(i) && i >= 0 && i < saved.values.length) : [];
+        Object.assign(saved, autoWater(puzzle.fleet!, puzzle.initial, saved.values, puzzle.size, previous));
+      }
       return saved;
     }
-    return { values: [...puzzle.initial], notes: {}, elapsed: 0, completed: false };
+    return { values: [...puzzle.initial], notes: {}, elapsed: 0, completed: false,
+      ...(puzzle.kind === "battleships" ? autoWater(puzzle.fleet!, puzzle.initial, puzzle.initial, puzzle.size) : {}) };
   }
   private validEntries(p: Puzzle, a: number[]): boolean {
     switch (p.kind) {

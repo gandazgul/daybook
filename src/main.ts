@@ -1,4 +1,5 @@
 import { fleetInventory, shipLineStatus, shipParts, touchingShipCells, type ShipPart } from "./battleships.ts";
+import { autoWater, battleshipsFixed } from "./battleships-assist.ts";
 import { isSudoku, sudokuUnits } from "./mini-sudoku.ts";
 import { galaxyRegions, validGalaxyRegions } from "./galaxies.ts";
 import { ARCHIVE_START } from "./puzzle-archive.ts";
@@ -115,8 +116,8 @@ class Daybook extends Phaser.Scene {
   reviewSet = -1;
   notes = false;
   temporaryNotes = false;
-  history: { values: number[]; notes: Record<number, number[]> }[] = [];
-  redoHistory: { values: number[]; notes: Record<number, number[]> }[] = [];
+  history: { values: number[]; notes: Record<number, number[]>; autoWater?: number[] }[] = [];
+  redoHistory: { values: number[]; notes: Record<number, number[]>; autoWater?: number[] }[] = [];
   board = { x: 0, y: 0, cell: 0, n: 0 };
   scrollY = 0;
   contentHeight = 0;
@@ -278,7 +279,7 @@ class Daybook extends Phaser.Scene {
       if (i >= 0 && i !== this.pointerLast && !this.progress?.completed) {
         this.pointerDragged = true;
         if (this.puzzle?.kind === "battleships") {
-          const marks = this.battleshipsInput.move(i, this.progress!.values, this.puzzle.initial, this.puzzle.size);
+          const marks = this.battleshipsInput.move(i, this.progress!.values, this.battleshipsFixed(), this.puzzle.size);
           this.applyBattleshipsMarks(marks);
           this.pointerLast = i;
           return;
@@ -349,8 +350,8 @@ class Daybook extends Phaser.Scene {
         }
         if (this.puzzle?.kind === "nurikabe" && this.pointerStart >= 0 && i >= 0) this.paintNurikabe(i);
         if (this.puzzle?.kind === "battleships") {
-          if (i >= 0 && i !== this.pointerLast) this.applyBattleshipsMarks(this.battleshipsInput.move(i, this.progress!.values, this.puzzle.initial, this.puzzle.size));
-          const edit = this.battleshipsInput.end(i, this.progress!.values, this.puzzle.initial, performance.now());
+          if (i >= 0 && i !== this.pointerLast) this.applyBattleshipsMarks(this.battleshipsInput.move(i, this.progress!.values, this.battleshipsFixed(), this.puzzle.size));
+          const edit = this.battleshipsInput.end(i, this.progress!.values, this.battleshipsFixed(), performance.now());
           this.applyBattleshipsMarks(edit.marks, edit.mergeUndo);
         }
         if (this.puzzle?.kind === "queens") this.queensInput.end(i, performance.now());
@@ -1371,7 +1372,7 @@ class Daybook extends Phaser.Scene {
     this.battleshipsInput.reset();
     this.sudokuTap = undefined;
     this.touchPulses = [];
-    this.hint = mode === "smart" ? smartHint(this.puzzle, this.progress.values)
+    this.hint = mode === "smart" ? smartHint(this.puzzle, this.progress.values, this.progress.autoWater)
       : mode === "reveal" ? revealHint(this.puzzle, this.progress.values) : undefined;
     if (mode === "smart" && this.hint?.values) {
       this.hint.text += " This assumes your existing entries and marks are correct.";
@@ -1460,7 +1461,7 @@ class Daybook extends Phaser.Scene {
     }
     const focus = new Set(step.cells), s = this.board.cell;
     const overlay = this.add.graphics().setName("tutorial-highlight");
-    const highlight = step.example?.invalid ? c.error : c.accent;
+    const highlight = step.example?.invalid || inHint && this.hint?.conflict ? c.error : c.accent;
     if (p.kind === "sets") {
       for (let i = 0; i < 8; i++) {
         const r = this.setsCardRect(i);
@@ -1480,6 +1481,12 @@ class Daybook extends Phaser.Scene {
       if (!focus.has(i + n)) overlay.lineBetween(x, y + s, x + s, y + s);
       if (i % n === 0 || !focus.has(i - 1)) overlay.lineBetween(x, y, x, y + s);
       if (i % n === n - 1 || !focus.has(i + 1)) overlay.lineBetween(x + s, y, x + s, y + s);
+    }
+    if (inHint && p.kind === "battleships") {
+      // Individual outlines keep separate mistakes visible even when they share an edge.
+      for (const i of focus) overlay.lineStyle(2, highlight).strokeRect(this.board.x + i % n * s + 3, this.board.y + Math.floor(i / n) * s + 3, s - 6, s - 6);
+      const changed = this.hint?.values?.findIndex((v, i) => v !== progress!.values[i]) ?? -1;
+      if (changed >= 0) overlay.lineStyle(4, c.accent).strokeRect(this.board.x + changed % n * s + 2, this.board.y + Math.floor(changed / n) * s + 2, s - 4, s - 4);
     }
     }
     for (const [x1, y1, x2, y2] of step.lines || []) {
@@ -2389,12 +2396,14 @@ class Daybook extends Phaser.Scene {
     this.history.push({
       values: [...this.progress.values],
       notes: structuredClone(this.progress.notes),
+      autoWater: this.progress.autoWater ? [...this.progress.autoWater] : undefined,
     });
     if (this.history.length > 200) this.history.shift();
     this.redoHistory = [];
   }
   changed() {
     this.notice = "";
+    if (this.puzzle?.kind === "battleships") Object.assign(this.progress!, autoWater(this.puzzle.fleet!, this.puzzle.initial, this.progress!.values, this.puzzle.size, this.progress!.autoWater));
     const solved = isSolved(this.puzzle!, this.progress!.values);
     if (solved && !this.progress!.completed) {
       this.progress!.completed = true;
@@ -2414,10 +2423,16 @@ class Daybook extends Phaser.Scene {
     if (!marks.length) return;
     if (!this.battleshipsStroke && !mergeUndo) this.snapshot();
     this.battleshipsStroke = true;
+    this.progress!.autoWater = this.progress!.autoWater?.filter((i) => !marks.some((m) => m.index === i));
     marks.forEach(({index, value}) => this.progress!.values[index] = value);
     this.selected = marks.at(-1)!.index;
     this.changed();
     marks.forEach(({index}) => this.cellFeedback(index));
+  }
+  battleshipsFixed() {
+    const p = this.puzzle!;
+    // Allow an incorrect ship from an old save in a zero line to be cleared.
+    return battleshipsFixed(p.fleet!, p.initial, p.size).map((v, i) => !p.initial[i] && this.progress!.values[i] === 1 ? 0 : v);
   }
   setPuzzleBoard(x: number, y: number, size: number, n: number) {
     const inset = this.puzzle?.kind === "battleships" ? .7 : 0;
@@ -2460,9 +2475,9 @@ class Daybook extends Phaser.Scene {
   drawBattleships() {
     const p = this.puzzle!, a = this.progress!.values, c = this.C;
     const {x,y,cell:s,n} = this.board, parts = shipParts(a,n), data = p.fleet!;
-    const touching = touchingShipCells(a,n);
+    const touching = touchingShipCells(a,n), fixedCells = this.battleshipsFixed();
     for (let i=0;i<n*n;i++) {
-      const xx=x+i%n*s, yy=y+Math.floor(i/n)*s, fixed=!!p.initial[i];
+      const xx=x+i%n*s, yy=y+Math.floor(i/n)*s, fixed=!!fixedCells[i];
       this.box(xx,yy,s,s, this.selected === i ? c.soft : c.panel,c.line,0);
       if (a[i]===1) this.shipPart(xx+s/2,yy+s/2,s, fixed ? data.parts[i] || "ship" : parts[i],touching.has(i)?c.error:0x000000);
       if (a[i]===2) this.box(xx+2,yy+2,s-4,s-4,this.tint("nurikabe"),undefined,0);
@@ -2500,7 +2515,7 @@ class Daybook extends Phaser.Scene {
     }
     if (
       p.kind === "fivecells" || p.kind === "galaxies" || (p.kind === "dosun" && p.regions[i] < 0) ||
-      (p.kind === "battleships" && p.initial[i] > 0) ||
+      (p.kind === "battleships" && this.battleshipsFixed()[i] > 0) ||
       (p.kind === "nurikabe" && p.clues[i] > 0) ||
       (p.kind === "mosaic" && p.initial[i] > 0) ||
       (p.kind === "akari" && p.clues[i] !== AKARI_WHITE)
@@ -2592,6 +2607,7 @@ class Daybook extends Phaser.Scene {
     }
     this.snapshot();
     a[i] = p.kind === "pipes" ? rotate(a[i]) : p.kind === "battleships" ? a[i] === 0 ? 2 : a[i] === 2 ? 1 : 0 : (a[i] + 1) % 3;
+    if (p.kind === "battleships") this.progress.autoWater = this.progress.autoWater?.filter((j) => j !== i);
     this.changed();
   }
   placeRectangle(a: number, b: number) {
@@ -2714,6 +2730,7 @@ class Daybook extends Phaser.Scene {
     this.redoHistory.push({
       values: [...this.progress.values],
       notes: structuredClone(this.progress.notes),
+      autoWater: this.progress.autoWater ? [...this.progress.autoWater] : undefined,
     });
     Object.assign(this.progress, this.history.pop()!);
     this.rectStart = -1;
@@ -2727,6 +2744,7 @@ class Daybook extends Phaser.Scene {
     this.history.push({
       values: [...this.progress.values],
       notes: structuredClone(this.progress.notes),
+      autoWater: this.progress.autoWater ? [...this.progress.autoWater] : undefined,
     });
     Object.assign(this.progress, this.redoHistory.pop()!);
     this.changed();

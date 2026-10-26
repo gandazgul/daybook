@@ -36,7 +36,8 @@ Deno.test("every archived variant preserves board identity, saved entries, notes
     assert(day.schema === 1 && /^[a-f0-9]{40}$/.test(day.revision));
     let count = 0;
     for (const kind of KINDS.filter((kind) => !!day.puzzles[`${kind}/classic`])) {
-      const expectedDefault = kind === "nurikabe" && day.date >= "2026-10-03" ? "medium"
+      const expectedDefault = kind === "pipes" && day.date >= "2026-10-05" ? "medium"
+        : kind === "nurikabe" && day.date >= "2026-10-03" ? "medium"
         : (kind === "shikaku" || kind === "nurikabe") && day.date >= "2026-10-02" ? "hard"
         : day.defaults[kind] ?? undefined;
       assert(dailyDifficulty(kind, day.date) === expectedDefault);

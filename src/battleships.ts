@@ -118,18 +118,25 @@ export function validBattleships(data: FleetClues, values: number[], n: number) 
 export function deduceBattleships(data: FleetClues, initial: number[], n: number) {
   const a = [...initial];
   let conflict = false;
+  let reason: { text: string; cells: number[] } | undefined;
+  const evidence = initial.map((v, i) => v ? [i] : [] as number[]);
+  const explain = (text: string, cells: number[]) => {
+    if (!reason) reason = { text, cells: [...new Set(cells.flatMap((i) => evidence[i]?.length ? evidence[i] : [i]))] };
+    conflict = true;
+  };
   const moves: { index: number; value: number; text: string; cells: number[] }[] = [];
   const put = (i: number, v: number, text: string, cells: number[]) => {
     if (i < 0 || i >= n * n) {
-      conflict = true;
+      explain(text, cells);
       return;
     }
     if (a[i] && a[i] !== v) {
-      conflict = true;
+      explain(`${text} This conflicts with the marks shown.`, [...cells, i]);
       return;
     }
     if (!a[i]) {
       a[i] = v;
+      evidence[i] = [...new Set(cells.flatMap((j) => evidence[j]))];
       moves.push({ index: i, value: v, text, cells });
     }
   };
@@ -141,7 +148,7 @@ export function deduceBattleships(data: FleetClues, initial: number[], n: number
         const cells = range(n).map((k) => axis ? k * n + line : line * n + k);
         const used = cells.filter((i) => a[i] === 1).length, unknown = cells.filter((i) => !a[i]);
         if (used > target || used + unknown.length < target) {
-          conflict = true;
+          explain(`${axis ? "Column" : "Row"} ${line + 1} needs ${target} ship squares, but these marks force ${used > target ? `at least ${used}` : `at most ${used + unknown.length}`}. Check the highlighted entries that lead to this total.`, cells);
           break;
         }
         if (used === target || used + unknown.length === target) {
@@ -182,7 +189,7 @@ export function deduceBattleships(data: FleetClues, initial: number[], n: number
       const offsets: Partial<Record<ShipPart, number>> = { top: n, bottom: -n, left: 1, right: -1 };
       if (offsets[part] !== undefined) {
         const next = i + offsets[part]!;
-        if (!shipNeighbors(i, n).includes(next)) conflict = true;
+        if (!shipNeighbors(i, n).includes(next)) explain("This revealed ship end points outside the board.", [i]);
         else {put(
             next,
             1,
@@ -211,7 +218,7 @@ export function deduceBattleships(data: FleetClues, initial: number[], n: number
       }
     }
   }
-  return { values: a, moves, conflict };
+  return { values: a, moves, conflict, reason };
 }
 /** Enumerate row patterns, pruning totals, diagonal contact and visible ship clues. */
 export function solveBattleships(

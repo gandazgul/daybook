@@ -217,11 +217,11 @@ function ruleSteps(p: VisiblePuzzle): TutorialStep[] {
       }));
     case "battleships":
       return [
-        step("Count ship squares", "The numbers above and beside the grid count ship squares in each column and row. A zero means the whole line is water."),
+        step("Count ship squares", "The numbers above and beside the grid count ship squares in each column and row. Zero lines start filled with fixed water. When a line has all its ship squares, its remaining blanks fill with water automatically."),
         step("Find the whole fleet", "The fleet counts valid ships / needed for each length. Green means enough, orange means missing, and red means too many. Touching, bent or unfinished clue ships do not count. Counts update as you join or erase pieces."),
-        step("Leave water between ships", "Different ships cannot touch, even at corners. Pieces that touch diagonally turn red. Once you find a ship square, its diagonal neighbors must be water."),
+        step("Leave water between ships", "Different ships cannot touch, even at corners. Pieces that touch diagonally turn red. Water fills automatically at diagonals, beside straight ships, and around revealed submarines or ships that reach the fleet's maximum length. Removing a ship removes water that depended on it."),
         step("Read revealed ship parts", "Starting clues are fixed and have a small corner dot. A round ship clue is a submarine. A rounded end has the rest of its ship on its flat side. A square middle clue continues on two opposite sides."),
-        step("Paint or erase water", "Drag from a blank cell to paint water. Start on water to erase it. Both preserve ships and fixed clues, and Undo reverses the whole stroke. Tap a blank cell to mark just that square as water."),
+        step("Paint or erase water", "Drag from a blank cell to paint water. Start on water to erase your water marks. Water required by your ships fills back in until those ships change. Both gestures preserve ships and fixed clues. Undo reverses a move and its automatic water together."),
         step("Place a ship", "Tap a water cell to turn it into a ship. Double-click or double-tap any editable cell to place a ship directly. Tap a ship once to clear it. With a keyboard, use arrows and Space."),
       ];
     case "galaxies":

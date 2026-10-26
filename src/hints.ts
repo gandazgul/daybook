@@ -1,4 +1,4 @@
-import { deduceBattleships, solveBattleships } from "./battleships.ts";
+import { autoWater, battleshipsAdvice } from "./battleships-assist.ts";
 import { sudokuUnits } from "./mini-sudoku.ts";
 import { solveGalaxies } from "./galaxies.ts";
 import { findSets, setDescription } from "./sets.ts";
@@ -16,6 +16,7 @@ export interface Hint {
   text: string;
   cells: number[];
   values?: number[];
+  conflict?: boolean;
 }
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const at = (i: number, n: number) => `row ${Math.floor(i / n) + 1}, column ${i % n + 1}`;
@@ -27,6 +28,7 @@ const problem = (text: string, cells: number[]): Hint => ({
   title: "Check these entries",
   text,
   cells,
+  conflict: true,
 });
 const move = (a: number[], i: number, v: number, text: string, cells = [i]): Hint => {
   const values = [...a];
@@ -52,24 +54,25 @@ function groups(a: number[], n: number, value: number) {
   return result;
 }
 
-export function smartHint(p: VisiblePuzzle, a: number[]): Hint {
+export function smartHint(p: VisiblePuzzle, a: number[], automaticWater: number[] = []): Hint {
   const n = p.size, all = range(n * n);
   const row = (i: number) => all.filter((j) => Math.floor(i / n) === Math.floor(j / n));
   const col = (i: number) => all.filter((j) => i % n === j % n);
   const put = (i: number, v: number, why: string, cells = [i]) => move(a, i, v, why, cells);
   switch (p.kind) {
     case "battleships": {
-      const deduction = deduceBattleships(p.fleet!, a, n);
-      if (deduction.conflict) return problem("The entries conflict with a row or column total, a revealed ship part, or the rule that ships cannot touch. Check the marked ships and water.", all);
-      const next = deduction.moves[0];
-      if (next) return put(next.index, next.value, next.text, next.cells);
-      const solved = solveBattleships(p.fleet!, a, n, 2, 30000);
-      if (!solved.exhausted && !solved.solutions.length) return problem("No arrangement of the required fleet fits these entries. Check the ship and water marks.", all);
-      if (!solved.exhausted && solved.solutions.length === 1) {
-        const i = a.findIndex((v) => !v);
-        if (i >= 0) return put(i, solved.solutions[0][i],
-          `Combining the fleet sizes, row and column totals, revealed parts and no-touching rule leaves one possible arrangement. This square must be ${solved.solutions[0][i] === 1 ? "a ship" : "water"}.`, [i]);
+      const advice = battleshipsAdvice(p.fleet!, a, p.initial, n);
+      if (advice && advice.index === undefined && automaticWater.length) {
+        const causes = new Map<number, number[]>();
+        autoWater(p.fleet!, p.initial, a, n, automaticWater, causes);
+        const ships = advice.cells.flatMap((i) => causes.get(i) ?? []);
+        if (ships.some((i) => !p.initial[i])) {
+          advice.cells = [...new Set([...advice.cells, ...ships])];
+          advice.text += " Some highlighted water was added automatically. Change the highlighted ship placements to remove the water that depends on them.";
+        }
       }
+      if (advice) return advice.index === undefined ? problem(advice.text, advice.cells)
+        : put(advice.index, advice.value!, advice.text, advice.cells);
       break;
     }
     case "akari": {

@@ -560,6 +560,15 @@ The fleet shows valid ships / required per length: green when complete, orange w
 when excessive. Bent, touching and unfinished clue ships do not count. Edge totals turn red for excess
 ship squares or when water marks leave too few spaces to reach the target.
 
+Zero rows and columns start filled with fixed water. Water also fills automatically in completed
+lines, diagonally around ships, along the sides of straight ships, around revealed submarines and
+behind revealed ends, and around ships as long as the largest fleet member. Only water is automated;
+ship placements stay editable. Derived water is tracked separately from manual marks, recomputed when
+ships change, saved across reloads, and included in the same undo/redo step as the move.
+Smart hints highlight specific conflicting entries in red and explain totals, touching pieces,
+revealed-part conflicts, fleet placements, overlapping possible placements and contradiction deductions.
+They never consult the generated answer. Published puzzle definitions are unchanged.
+
 The bank authoring command is
 `deno run --allow-write=src/battleships-bank.json scripts/build-battleships-bank.ts`.
 Published archives stay unchanged, as do the other games’ seeds and storage keys.
